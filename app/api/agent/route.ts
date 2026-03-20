@@ -1,7 +1,6 @@
 // app/api/agent/route.ts
 export const runtime = "edge";
 
-import Anthropic from "@anthropic-ai/sdk";
 import {
   cartographerPrompt,
   analystPrompt,
@@ -11,10 +10,6 @@ import {
   type AgentPromptInput,
 } from "@/lib/agentPrompts";
 import type { AgentStep } from "@/lib/types";
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
 
 type AgentRequestBody = {
   step: AgentStep;
@@ -49,24 +44,64 @@ export async function POST(req: Request) {
     const maxTokens =
       step === "reconstructor" || step === "cartographer" ? 6000 : 4000;
 
-    const stream = await anthropic.messages.stream({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: "user", content: user }],
+    // Call Anthropic API directly with fetch — works on Edge runtime
+    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY ?? "",
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: maxTokens,
+        stream: true,
+        system,
+        messages: [{ role: "user", content: user }],
+      }),
     });
+
+    if (!anthropicRes.ok || !anthropicRes.body) {
+      const err = await anthropicRes.text();
+      return new Response(
+        JSON.stringify({ error: `Anthropic API error: ${err}` }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Transform the Anthropic SSE stream into a plain text stream
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
 
     const readable = new ReadableStream({
       async start(controller) {
+        const reader = anthropicRes.body!.getReader();
+        let buffer = "";
         try {
-          for await (const chunk of stream) {
-            if (
-              chunk.type === "content_block_delta" &&
-              chunk.delta.type === "text_delta"
-            ) {
-              controller.enqueue(
-                new TextEncoder().encode(chunk.delta.text)
-              );
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const data = line.slice(6).trim();
+              if (data === "[DONE]" || data === "") continue;
+              try {
+                const parsed = JSON.parse(data);
+                if (
+                  parsed.type === "content_block_delta" &&
+                  parsed.delta?.type === "text_delta" &&
+                  parsed.delta?.text
+                ) {
+                  controller.enqueue(encoder.encode(parsed.delta.text));
+                }
+              } catch {
+                // malformed JSON line — skip
+              }
             }
           }
           controller.close();
