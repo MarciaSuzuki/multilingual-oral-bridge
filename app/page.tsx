@@ -599,6 +599,11 @@ export default function OralBridgePage() {
   const approveStep = useCallback((step: AgentStep, tracks: { faithful: boolean; commented: boolean }) => {
     setStepStatuses(prev => ({ ...prev, [step]: "done" }));
 
+    if (step === "cartographer") {
+      setStepStatuses(prev => ({ ...prev, analyst: "active" }));
+      return;
+    }
+
     if (step === "analyst") {
       const next: Partial<Record<AgentStep, StepStatus>> = {};
       if (tracks.faithful) next.faithful_reconstructor = "active";
