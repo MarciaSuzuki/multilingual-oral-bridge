@@ -1,137 +1,87 @@
-/* app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --ink-950: #0d0f14;
-  --ink-900: #131620;
-  --ink-800: #1b1f2e;
-  --ink-700: #242840;
-  --ink-600: #2e3352;
-  --amber-gold: #c9922a;
-  --amber-warm: #e8b86d;
-  --amber-pale: #f5dfa8;
-  --slate-muted: #8892a4;
-  --slate-light: #b8c2d4;
-  --text-primary: #e8e4da;
-  --text-secondary: #a8a09a;
+  /* Shema brand */
+  --shema-telha: #be4a01;
+  --shema-telha-light: #d4622a;
+  --shema-telha-pale: #f0c4a8;
+  --shema-verde: #3f3e20;
+  --shema-verde-mid: #777d45;
+  --shema-verde-light: #a8ad78;
+  --shema-cream: #f6f5eb;
+  --shema-cream-dim: #ccc9b0;
+
+  /* App surfaces */
+  --bg-base: #111109;
+  --bg-surface: #1a1a0c;
+  --bg-raised: #222215;
+  --bg-card: #1e1e12;
+  --border-subtle: #35351e;
+  --border-mid: #4a4a2a;
+
+  /* Text */
+  --text-primary: #f6f5eb;
+  --text-secondary: #b0ad94;
+  --text-muted: #787560;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-html,
-body {
-  background-color: var(--ink-950);
+html, body {
+  background-color: var(--bg-base);
   color: var(--text-primary);
-  font-family: "Source Serif 4", Georgia, serif;
+  font-family: 'Source Serif 4', Georgia, serif;
   font-size: 16px;
   line-height: 1.65;
   min-height: 100vh;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--ink-800);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--ink-600);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--amber-gold);
-}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg-raised); }
+::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--shema-telha); }
 
-/* Textarea base */
 textarea {
-  font-family: "Source Serif 4", Georgia, serif;
+  font-family: 'Source Serif 4', Georgia, serif;
   font-size: 0.9rem;
   line-height: 1.7;
   color: var(--text-primary);
   background: transparent;
   resize: vertical;
 }
-textarea:focus {
-  outline: none;
-}
+textarea:focus { outline: none; }
 
-/* Streaming text animation */
 @keyframes cursor-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
 }
 .streaming-cursor::after {
   content: "▋";
-  color: var(--amber-gold);
+  color: var(--shema-telha);
   animation: cursor-blink 0.8s ease-in-out infinite;
   margin-left: 2px;
   font-size: 0.85em;
 }
 
-/* Step connector line */
-.step-line {
-  position: absolute;
-  left: 50%;
-  top: 100%;
-  width: 2px;
-  height: 2rem;
-  background: linear-gradient(to bottom, var(--amber-gold), transparent);
-  transform: translateX(-50%);
-}
-
-/* Gold gradient text */
-.text-gold-gradient {
-  background: linear-gradient(135deg, var(--amber-gold), var(--amber-pale));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Prose content areas */
-.prose-output {
-  font-family: "Source Serif 4", Georgia, serif;
-  font-size: 0.925rem;
-  line-height: 1.8;
-  color: var(--text-primary);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* Framing marker highlighting */
-.framing-marker {
-  background: rgba(201, 146, 42, 0.15);
-  border-left: 2px solid var(--amber-gold);
-  padding-left: 0.5rem;
-  border-radius: 2px;
-  color: var(--amber-warm);
-}
-
-/* Fade-in animation */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.fade-in {
-  animation: fadeIn 0.4s ease-out forwards;
+.fade-in { animation: fadeIn 0.35s ease-out forwards; }
+
+@keyframes pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(190, 74, 1, 0.5); }
+  50% { box-shadow: 0 0 0 5px rgba(190, 74, 1, 0); }
 }
 
-/* Grain overlay */
+/* Grain texture */
 body::before {
   content: "";
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.025;
+  inset: 0;
+  opacity: 0.03;
   pointer-events: none;
   z-index: 0;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
