@@ -1,5 +1,6 @@
 // app/api/agent/route.ts
 export const runtime = "edge";
+export const maxDuration = 60;
 
 import {
   cartographerPrompt,
@@ -44,7 +45,6 @@ export async function POST(req: Request) {
     const maxTokens =
       step === "reconstructor" || step === "cartographer" ? 6000 : 4000;
 
-    // Call Anthropic API directly with fetch — works on Edge runtime
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -53,75 +53,38 @@ export async function POST(req: Request) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: maxTokens,
-        stream: true,
         system,
         messages: [{ role: "user", content: user }],
       }),
     });
 
-    if (!anthropicRes.ok || !anthropicRes.body) {
+    if (!anthropicRes.ok) {
       const err = await anthropicRes.text();
       return new Response(
-        JSON.stringify({ error: `Anthropic API error: ${err}` }),
+        JSON.stringify({ error: `Anthropic API error ${anthropicRes.status}: ${err}` }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // Transform the Anthropic SSE stream into a plain text stream
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
+    const data = await anthropicRes.json() as {
+      content: Array<{ type: string; text?: string }>;
+    };
 
-    const readable = new ReadableStream({
-      async start(controller) {
-        const reader = anthropicRes.body!.getReader();
-        let buffer = "";
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+    const text = data.content
+      .filter((b) => b.type === "text")
+      .map((b) => b.text ?? "")
+      .join("");
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() ?? "";
-
-            for (const line of lines) {
-              if (!line.startsWith("data: ")) continue;
-              const data = line.slice(6).trim();
-              if (data === "[DONE]" || data === "") continue;
-              try {
-                const parsed = JSON.parse(data);
-                if (
-                  parsed.type === "content_block_delta" &&
-                  parsed.delta?.type === "text_delta" &&
-                  parsed.delta?.text
-                ) {
-                  controller.enqueue(encoder.encode(parsed.delta.text));
-                }
-              } catch {
-                // malformed JSON line — skip
-              }
-            }
-          }
-          controller.close();
-        } catch (err) {
-          controller.error(err);
-        }
-      },
+    return new Response(text, {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
 
-    return new Response(readable, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-cache",
-        "X-Accel-Buffering": "no",
-      },
-    });
   } catch (error) {
-    console.error("Agent API error:", error);
+    const msg = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: "Agent request failed" }),
+      JSON.stringify({ error: msg }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
