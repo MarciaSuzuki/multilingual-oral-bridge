@@ -12,7 +12,11 @@ import {
 // ─── Utilities ────────────────────────────────────────────────
 
 function stripFramingTags(text: string): string {
-  return text.replace(
+  // Remove everything from ## FRAMING NOTES onward (framer analysis, not spoken content)
+  const notesIndex = text.indexOf("## FRAMING NOTES");
+  const cleaned = notesIndex !== -1 ? text.slice(0, notesIndex).trim() : text;
+  // Resolve [ATTENTIONAL/STRUCTURAL/TURN: "content"] tags to just their spoken content
+  return cleaned.replace(
     /\[(ATTENTIONAL|STRUCTURAL|TURN): "([^"]*)"\]/g,
     (_m, _t, content: string) => content
   );
