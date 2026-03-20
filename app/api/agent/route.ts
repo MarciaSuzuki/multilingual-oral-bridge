@@ -4,8 +4,10 @@ export const runtime = "edge";
 import {
   cartographerPrompt,
   analystPrompt,
-  reconstructorPrompt,
-  framerPrompt,
+  faithfulReconstructorPrompt,
+  commentedReconstructorPrompt,
+  faithfulFramerPrompt,
+  commentedFramerPrompt,
   checkerPrompt,
   type AgentPromptInput,
 } from "@/lib/agentPrompts";
@@ -25,10 +27,14 @@ function getPromptForStep(
       return cartographerPrompt(input);
     case "analyst":
       return analystPrompt(input);
-    case "reconstructor":
-      return reconstructorPrompt(input);
-    case "framer":
-      return framerPrompt(input);
+    case "faithful_reconstructor":
+      return faithfulReconstructorPrompt(input);
+    case "commented_reconstructor":
+      return commentedReconstructorPrompt(input);
+    case "faithful_framer":
+      return faithfulFramerPrompt(input);
+    case "commented_framer":
+      return commentedFramerPrompt(input);
     case "checker":
       return checkerPrompt(input);
   }
@@ -42,7 +48,11 @@ export async function POST(req: Request) {
     const { system, user } = getPromptForStep(step, input);
 
     const maxTokens =
-      step === "reconstructor" || step === "cartographer" ? 3000 : 2000;
+      step === "faithful_reconstructor" ||
+      step === "commented_reconstructor" ||
+      step === "cartographer"
+        ? 3000
+        : 2000;
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
