@@ -2,7 +2,6 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
-  AGENT_CONFIGS,
   SUPPORTED_LANGUAGES,
   ELEVENLABS_VOICES,
   type AgentStep,
@@ -42,13 +41,29 @@ function slug(s: string) {
 }
 
 type StepStatus = "pending" | "active" | "running" | "done";
+type Tracks = { faithful: boolean; commented: boolean };
 
-const STEP_ORDER: AgentStep[] = [
-  "cartographer", "analyst",
-  "faithful_reconstructor", "commented_reconstructor",
-  "faithful_framer", "commented_framer",
-  "checker",
-];
+// Step display names
+const STEP_LABELS: Record<AgentStep, string> = {
+  cartographer: "Oral Exegesis",
+  analyst: "Oral Patterns",
+  faithful_reconstructor: "Oral Frames",
+  commented_reconstructor: "Oral Frames",
+  faithful_framer: "Oral Frames",
+  commented_framer: "Oral Frames",
+  checker: "Accuracy Check",
+};
+
+// More precise per-step labels (used inside panels)
+const STEP_FULL_LABELS: Record<AgentStep, string> = {
+  cartographer: "Oral Exegesis",
+  analyst: "Oral Patterns",
+  faithful_reconstructor: "Oral Reconstruction",
+  commented_reconstructor: "Oral Reconstruction",
+  faithful_framer: "Oral Frames",
+  commented_framer: "Oral Frames",
+  checker: "Accuracy Check",
+};
 
 const FAITHFUL_COLOR = "#6aa0dc";
 const COMMENTED_COLOR = "#a078dc";
@@ -70,11 +85,11 @@ const inputBase: React.CSSProperties = {
   borderRadius: 5, padding: "8px 11px", color: "var(--text-primary)",
   fontFamily: "'Source Serif 4', serif", fontSize: "0.875rem",
 };
-const primaryBtn: React.CSSProperties = {
-  padding: "8px 16px", background: "linear-gradient(135deg, var(--amber-gold), #a97420)",
+const primaryBtn = (color: string): React.CSSProperties => ({
+  padding: "8px 16px", background: `linear-gradient(135deg, ${color}, ${color}bb)`,
   border: "none", borderRadius: 4, color: "var(--ink-950)",
   fontFamily: "'Source Serif 4', serif", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
-};
+});
 const ghostBtn: React.CSSProperties = {
   padding: "6px 12px", background: "transparent", border: "1px solid var(--ink-600)",
   borderRadius: 4, color: "var(--slate-light)", fontFamily: "'Source Serif 4', serif",
@@ -85,19 +100,18 @@ const ghostBtn: React.CSSProperties = {
 
 function FramedPreview({ text }: { text: string }) {
   const cleaned = text.indexOf("## FRAMING NOTES") !== -1
-    ? text.slice(0, text.indexOf("## FRAMING NOTES")).trim()
-    : text;
+    ? text.slice(0, text.indexOf("## FRAMING NOTES")).trim() : text;
   const TAG_RE = /\[(ATTENTIONAL|STRUCTURAL|TURN): "([^"]*)"\]/g;
   const parts: React.ReactNode[] = [];
   let last = 0; let match: RegExpExecArray | null; let key = 0;
-  const styles: Record<string, { bg: string; border: string; label: string }> = {
+  const S: Record<string, { bg: string; border: string; label: string }> = {
     ATTENTIONAL: { bg: "rgba(201,146,42,0.14)", border: "#c9922a", label: "ATT" },
     STRUCTURAL: { bg: "rgba(100,160,220,0.10)", border: "#6aa0dc", label: "STR" },
     TURN: { bg: "rgba(120,190,120,0.10)", border: "#78be78", label: "TRN" },
   };
   while ((match = TAG_RE.exec(cleaned)) !== null) {
     if (match.index > last) parts.push(<span key={key++}>{cleaned.slice(last, match.index)}</span>);
-    const s = styles[match[1]] || styles.ATTENTIONAL;
+    const s = S[match[1]] || S.ATTENTIONAL;
     parts.push(
       <span key={key++} style={{ background: s.bg, borderBottom: `1.5px solid ${s.border}`, borderRadius: 2, padding: "1px 4px" }}>
         <span style={{ fontSize: "0.55em", letterSpacing: "0.08em", background: `${s.border}33`, color: s.border, borderRadius: 2, padding: "0 3px", marginRight: 4, fontFamily: "'JetBrains Mono', monospace" }}>{s.label}</span>
@@ -120,7 +134,7 @@ function exportTXT(state: PipelineState, track: "faithful" | "commented") {
   const text = track === "faithful"
     ? stripFramingTags(state.faithfulFramed || state.faithfulReconstruction)
     : stripFramingTags(state.commentedFramed || state.commentedReconstruction);
-  const label = track === "faithful" ? "Oral Scripture" : "Commented Scripture";
+  const label = track === "faithful" ? "Translation" : "Commentary";
   const header = [`Oral Bridge — ${label}`, `Passage: ${state.passageReference || "(unnamed)"}`, `Language: ${getLangLabel(state.targetLanguage)}`, `Community: ${state.communityContext}`, `Exported: ${new Date().toLocaleString()}`, "─────────────────────────────────", ""].join("\n");
   const blob = new Blob([header + text], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -135,25 +149,28 @@ function exportJSON(state: PipelineState) {
 
 // ─── Collapsible Section ───────────────────────────────────────
 
-function Section({ title, color, icon, status, defaultOpen = true, children }: {
-  title: string; color: string; icon: string; status: string;
-  defaultOpen?: boolean; children: React.ReactNode;
+function Section({ title, subtitle, color, icon, badge, defaultOpen = true, children }: {
+  title: string; subtitle?: string; color: string; icon: string;
+  badge?: string; defaultOpen?: boolean; children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{ border: `1px solid ${color}44`, borderRadius: 7, marginBottom: 8, overflow: "hidden", background: "rgba(19,22,32,0.5)" }}>
-      <div onClick={() => setOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", cursor: "pointer", userSelect: "none", background: `${color}0a` }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", userSelect: "none", background: `${color}0c` }}>
         <span style={{ color, fontSize: "0.9rem", flexShrink: 0 }}>{icon}</span>
-        <span style={{ fontFamily: "'Playfair Display', serif", fontSize: "0.88rem", fontWeight: 600, color: "var(--amber-pale)", flex: 1 }}>{title}</span>
-        <span style={{ fontSize: "0.62rem", letterSpacing: "0.08em", textTransform: "uppercase", color, marginRight: 8 }}>{status}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "0.88rem", fontWeight: 600, color: "var(--amber-pale)" }}>{title}</div>
+          {subtitle && <div style={{ fontSize: "0.62rem", color: "var(--slate-muted)", marginTop: 1 }}>{subtitle}</div>}
+        </div>
+        {badge && <span style={{ fontSize: "0.58rem", letterSpacing: "0.08em", textTransform: "uppercase", color, background: `${color}18`, border: `1px solid ${color}44`, borderRadius: 3, padding: "2px 7px" }}>{badge}</span>}
         <span style={{ color: "var(--slate-muted)", fontSize: "0.65rem" }}>{open ? "▾" : "▸"}</span>
       </div>
-      {open && <div style={{ padding: "12px 14px", borderTop: `1px solid ${color}22` }}>{children}</div>}
+      {open && <div style={{ padding: "10px 12px 12px", borderTop: `1px solid ${color}20` }}>{children}</div>}
     </div>
   );
 }
 
-// ─── Agent Step (compact) ──────────────────────────────────────
+// ─── Agent Step ────────────────────────────────────────────────
 
 function AgentStep({ step, label, description, status, output, isStreaming, error, color, onRun, onEdit, onApprove }: {
   step: AgentStep; label: string; description: string;
@@ -164,48 +181,46 @@ function AgentStep({ step, label, description, status, output, isStreaming, erro
   const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
   const isFramer = step === "faithful_framer" || step === "commented_framer";
   const hasFraming = isFramer && output.length > 0 && /\[(ATTENTIONAL|STRUCTURAL|TURN):/.test(output);
+  const isDone = status === "done";
+  const isActive = status === "active" || status === "running";
+  const isPending = status === "pending";
+  const dotColor = isDone ? color : isActive ? color : "var(--ink-600)";
+  const isOral = step !== "cartographer" && step !== "analyst" && step !== "checker";
+  const rows = Math.min(Math.max(output.split("\n").length + 1, 6), 28);
 
-  // Auto-open when active, auto-close when done
   useEffect(() => {
     if (status === "active") setOpen(true);
     if (status === "done") setOpen(false);
   }, [status]);
 
-  const isDone = status === "done";
-  const isActive = status === "active" || status === "running";
-  const isPending = status === "pending";
-  const dotColor = isDone ? color : isActive ? color : "var(--ink-600)";
-  const rows = Math.min(Math.max(output.split("\n").length + 1, 6), 28);
-
   return (
-    <div style={{ borderRadius: 6, marginBottom: 6, border: `1px solid ${isDone ? color + "55" : isActive ? color + "33" : "var(--ink-700)"}`, background: isDone ? `${color}06` : isActive ? "rgba(27,31,46,0.6)" : "rgba(19,22,32,0.3)", opacity: isPending ? 0.35 : 1, transition: "all 0.3s ease" }}>
-      <div onClick={() => (isDone || output) && setOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", cursor: isDone || output ? "pointer" : "default", userSelect: "none" }}>
-        {/* Status dot */}
-        <div style={{ width: 20, height: 20, borderRadius: "50%", border: `1.5px solid ${dotColor}`, background: isDone ? `${dotColor}22` : "transparent", display: "flex", alignItems: "center", justifyContent: "center", color: dotColor, fontSize: "0.65rem", flexShrink: 0, animation: isStreaming ? "pulse-ring 1.2s ease-in-out infinite" : "none" }}>
+    <div style={{ borderRadius: 6, marginBottom: 5, border: `1px solid ${isDone ? color + "44" : isActive ? color + "28" : "var(--ink-700)"}`, background: isDone ? `${color}06` : isActive ? "rgba(27,31,46,0.55)" : "rgba(19,22,32,0.25)", opacity: isPending ? 0.32 : 1, transition: "all 0.25s ease" }}>
+      <div onClick={() => (isDone || output) && setOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", cursor: isDone || output ? "pointer" : "default", userSelect: "none" }}>
+        <div style={{ width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${dotColor}`, background: isDone ? `${dotColor}22` : "transparent", display: "flex", alignItems: "center", justifyContent: "center", color: dotColor, fontSize: "0.6rem", flexShrink: 0, animation: isStreaming ? "pulse-ring 1.2s ease-in-out infinite" : "none", transition: "all 0.3s ease" }}>
           {isDone ? "✓" : isStreaming ? "◌" : ""}
         </div>
-        <span style={{ fontSize: "0.82rem", fontWeight: 600, color: isActive || isDone ? "var(--text-primary)" : "var(--slate-muted)", flex: 1 }}>{label}</span>
-        <span style={{ fontSize: "0.6rem", letterSpacing: "0.07em", textTransform: "uppercase", color: isDone ? color : isStreaming ? "var(--amber-warm)" : isActive ? "var(--slate-muted)" : "var(--ink-600)" }}>
+        <span style={{ fontSize: "0.8rem", fontWeight: 600, color: isActive || isDone ? "var(--text-primary)" : "var(--slate-muted)", flex: 1 }}>{label}</span>
+        <span style={{ fontSize: "0.58rem", letterSpacing: "0.06em", textTransform: "uppercase", color: isDone ? color : isStreaming ? "var(--amber-warm)" : isActive ? "var(--slate-muted)" : "var(--ink-600)" }}>
           {isDone ? "done" : isStreaming ? "running…" : isActive ? "ready" : "pending"}
         </span>
-        {(isDone || output) && <span style={{ color: "var(--slate-muted)", fontSize: "0.6rem", marginLeft: 4 }}>{open ? "▾" : "▸"}</span>}
+        {(isDone || output) && <span style={{ color: "var(--slate-muted)", fontSize: "0.58rem", marginLeft: 3 }}>{open ? "▾" : "▸"}</span>}
       </div>
 
       {open && (
         <div style={{ padding: "0 12px 12px" }}>
           {isActive && !output && !isStreaming && (
             <>
-              <p style={{ fontSize: "0.8rem", color: "var(--slate-light)", lineHeight: 1.65, marginBottom: 10 }}>{description}</p>
-              <button onClick={onRun} style={{ ...primaryBtn, background: `linear-gradient(135deg, ${color}, ${color}99)` }}>Run →</button>
+              <p style={{ fontSize: "0.78rem", color: "var(--slate-light)", lineHeight: 1.65, marginBottom: 10 }}>{description}</p>
+              <button onClick={onRun} style={primaryBtn(color)}>Run →</button>
             </>
           )}
-          {isStreaming && !output && <div className="streaming-cursor" style={{ fontSize: "0.8rem", color: "var(--slate-muted)", fontStyle: "italic", padding: "4px 0" }}>Thinking</div>}
+          {isStreaming && !output && <div className="streaming-cursor" style={{ fontSize: "0.78rem", color: "var(--slate-muted)", fontStyle: "italic", padding: "4px 0" }}>Thinking</div>}
           {output && (
             <>
               {hasFraming && (
                 <div style={{ display: "flex", gap: 5, marginBottom: 8 }}>
                   {(["edit", "preview"] as const).map(mode => (
-                    <button key={mode} onClick={() => setViewMode(mode)} style={{ padding: "2px 8px", fontSize: "0.65rem", letterSpacing: "0.05em", textTransform: "uppercase", border: `1px solid ${viewMode === mode ? color : "var(--ink-600)"}`, borderRadius: 3, background: viewMode === mode ? `${color}18` : "transparent", color: viewMode === mode ? color : "var(--slate-muted)", cursor: "pointer" }}>
+                    <button key={mode} onClick={() => setViewMode(mode)} style={{ padding: "2px 8px", fontSize: "0.63rem", letterSpacing: "0.05em", textTransform: "uppercase", border: `1px solid ${viewMode === mode ? color : "var(--ink-600)"}`, borderRadius: 3, background: viewMode === mode ? `${color}18` : "transparent", color: viewMode === mode ? color : "var(--slate-muted)", cursor: "pointer" }}>
                       {mode === "edit" ? "Edit" : "Preview"}
                     </button>
                   ))}
@@ -213,14 +228,14 @@ function AgentStep({ step, label, description, status, output, isStreaming, erro
               )}
               {viewMode === "preview" && hasFraming
                 ? <FramedPreview text={output} />
-                : <textarea value={output} onChange={(e) => onEdit(e.target.value)} disabled={isStreaming} rows={rows} className={isStreaming ? "streaming-cursor" : ""} style={{ ...textareaBase, fontFamily: step === "cartographer" || step === "analyst" || step === "checker" ? "'JetBrains Mono', monospace" : "'Source Serif 4', serif", fontSize: step === "cartographer" || step === "analyst" || step === "checker" ? "0.76rem" : "0.9rem", opacity: isStreaming ? 0.65 : 1 }} />
+                : <textarea value={output} onChange={(e) => onEdit(e.target.value)} disabled={isStreaming} rows={rows} className={isStreaming ? "streaming-cursor" : ""} style={{ ...textareaBase, fontFamily: isOral ? "'Source Serif 4', serif" : "'JetBrains Mono', monospace", fontSize: isOral ? "0.9rem" : "0.75rem", opacity: isStreaming ? 0.65 : 1 }} />
               }
-              {error && <div style={{ marginTop: 8, padding: "7px 10px", background: "rgba(180,50,50,0.12)", border: "1px solid rgba(180,50,50,0.3)", borderRadius: 4, color: "#e88", fontSize: "0.76rem" }}>{error}</div>}
+              {error && <div style={{ marginTop: 7, padding: "7px 10px", background: "rgba(180,50,50,0.12)", border: "1px solid rgba(180,50,50,0.3)", borderRadius: 4, color: "#e88", fontSize: "0.75rem" }}>{error}</div>}
               {!isStreaming && (
-                <div style={{ display: "flex", gap: 6, marginTop: 9, justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", gap: 6, marginTop: 8, justifyContent: "flex-end" }}>
                   <button onClick={onRun} style={ghostBtn}>↻ Redo</button>
-                  {!isDone && <button onClick={onApprove} style={{ ...primaryBtn, background: `linear-gradient(135deg, ${color}, ${color}99)` }}>Approve →</button>}
-                  {isDone && <span style={{ fontSize: "0.68rem", color, alignSelf: "center" }}>✓ Approved</span>}
+                  {!isDone && <button onClick={onApprove} style={primaryBtn(color)}>Approve →</button>}
+                  {isDone && <span style={{ fontSize: "0.67rem", color, alignSelf: "center" }}>✓ Approved</span>}
                 </div>
               )}
             </>
@@ -257,7 +272,7 @@ function AudioPanel({ title, color, text, passageRef, langCode, trackId, onExpor
 
   return (
     <div style={{ border: `1px solid ${color}55`, borderRadius: 7, overflow: "hidden", background: `${color}07` }}>
-      <div onClick={() => setOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", userSelect: "none", background: `${color}0d` }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", userSelect: "none", background: `${color}0e` }}>
         <span style={{ color, fontSize: "1rem" }}>♪</span>
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "0.88rem", fontWeight: 600, color: "var(--amber-pale)" }}>{title}</div>
@@ -281,7 +296,7 @@ function AudioPanel({ title, color, text, passageRef, langCode, trackId, onExpor
               <input type="text" value={customVoice} onChange={(e) => setCustomVoice(e.target.value)} placeholder="Paste ElevenLabs ID…" style={{ ...inputBase, fontFamily: "'JetBrains Mono', monospace", fontSize: "0.75rem" }} />
             </div>
           </div>
-          <button onClick={generate} disabled={loading || !cleanText.trim()} style={{ width: "100%", padding: "10px 24px", background: loading || !cleanText.trim() ? "var(--ink-700)" : `linear-gradient(135deg, ${color}, ${color}bb)`, border: "none", borderRadius: 5, color: loading || !cleanText.trim() ? "var(--slate-muted)" : "var(--ink-950)", fontFamily: "'Playfair Display', serif", fontSize: "0.88rem", fontWeight: 600, cursor: loading || !cleanText.trim() ? "not-allowed" : "pointer", marginBottom: 10, transition: "all 0.2s ease" }}>
+          <button onClick={generate} disabled={loading || !cleanText.trim()} style={{ width: "100%", padding: "10px 24px", background: loading || !cleanText.trim() ? "var(--ink-700)" : `linear-gradient(135deg, ${color}, ${color}bb)`, border: "none", borderRadius: 5, color: loading || !cleanText.trim() ? "var(--slate-muted)" : "var(--ink-950)", fontFamily: "'Playfair Display', serif", fontSize: "0.88rem", fontWeight: 600, cursor: loading || !cleanText.trim() ? "not-allowed" : "pointer", marginBottom: 10 }}>
             {loading ? "Generating…" : "Generate Audio ♪"}
           </button>
           {error && <div style={{ padding: "8px 10px", background: "rgba(180,50,50,0.12)", border: "1px solid rgba(180,50,50,0.3)", borderRadius: 4, color: "#e88", fontSize: "0.78rem", marginBottom: 8 }}>{error}</div>}
@@ -304,24 +319,8 @@ function AudioPanel({ title, color, text, passageRef, langCode, trackId, onExpor
 // ─── Progress Strip ────────────────────────────────────────────
 
 function ProgressStrip({ statuses, streaming, tracks }: {
-  statuses: Record<AgentStep, StepStatus>;
-  streaming: AgentStep | null;
-  tracks: { faithful: boolean; commented: boolean };
+  statuses: Record<AgentStep, StepStatus>; streaming: AgentStep | null; tracks: Tracks;
 }) {
-  const sharedSteps = [
-    { id: "cartographer" as AgentStep, label: "Semantic Cartographer", color: SHARED_COLOR },
-    { id: "analyst" as AgentStep, label: "Oral Pattern Analyst", color: SHARED_COLOR },
-  ];
-  const faithfulSteps = [
-    { id: "faithful_reconstructor" as AgentStep, label: "Faithful Reconstructor", color: FAITHFUL_COLOR },
-    { id: "faithful_framer" as AgentStep, label: "Faithful Framer", color: FAITHFUL_COLOR },
-    { id: "checker" as AgentStep, label: "Fidelity Checker", color: FAITHFUL_COLOR },
-  ];
-  const commentedSteps = [
-    { id: "commented_reconstructor" as AgentStep, label: "Commented Reconstructor", color: COMMENTED_COLOR },
-    { id: "commented_framer" as AgentStep, label: "Commented Framer", color: COMMENTED_COLOR },
-  ];
-
   const Dot = ({ id, label, color }: { id: AgentStep; label: string; color: string }) => {
     const s = statuses[id];
     const isDone = s === "done";
@@ -329,61 +328,51 @@ function ProgressStrip({ statuses, streaming, tracks }: {
     const isRunning = streaming === id;
     const c = isDone ? color : isActive ? color : "var(--ink-600)";
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 64 }}>
-        <div style={{ width: 22, height: 22, borderRadius: "50%", border: `1.5px solid ${c}`, background: isDone ? `${c}22` : "transparent", display: "flex", alignItems: "center", justifyContent: "center", color: c, fontSize: "0.65rem", animation: isRunning ? "pulse-ring 1.2s ease-in-out infinite" : "none", transition: "all 0.3s ease" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, minWidth: 58 }}>
+        <div style={{ width: 20, height: 20, borderRadius: "50%", border: `1.5px solid ${c}`, background: isDone ? `${c}22` : "transparent", display: "flex", alignItems: "center", justifyContent: "center", color: c, fontSize: "0.6rem", animation: isRunning ? "pulse-ring 1.2s ease-in-out infinite" : "none", transition: "all 0.3s ease" }}>
           {isDone ? "✓" : ""}
         </div>
-        <span style={{ fontSize: "0.54rem", letterSpacing: "0.04em", textTransform: "uppercase", color: isDone || isActive ? c : "var(--ink-600)", textAlign: "center", lineHeight: 1.3, maxWidth: 60 }}>{label}</span>
+        <span style={{ fontSize: "0.5rem", letterSpacing: "0.04em", textTransform: "uppercase", color: isDone || isActive ? c : "var(--ink-600)", textAlign: "center", lineHeight: 1.3, maxWidth: 56 }}>{label}</span>
       </div>
     );
   };
-
   const Line = ({ color, done }: { color: string; done: boolean }) => (
-    <div style={{ height: 1, flex: 1, background: done ? color : "var(--ink-600)", transition: "background 0.4s ease", marginBottom: 18, minWidth: 12 }} />
+    <div style={{ height: 1, flex: 1, background: done ? color : "var(--ink-600)", transition: "background 0.4s ease", margin: "0 3px", marginBottom: 16, minWidth: 8 }} />
   );
 
   return (
-    <div style={{ padding: "14px 24px 8px", borderBottom: "1px solid var(--ink-700)", background: "rgba(13,15,20,0.8)", overflowX: "auto" }}>
+    <div style={{ padding: "12px 24px 8px", borderBottom: "1px solid var(--ink-700)", background: "rgba(13,15,20,0.85)", overflowX: "auto" }}>
       <style>{`@keyframes pulse-ring{0%,100%{box-shadow:0 0 0 0 rgba(201,146,42,0.5)}50%{box-shadow:0 0 0 4px rgba(201,146,42,0)}}`}</style>
-
-      {/* Shared steps */}
-      <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 6 }}>
-        <div style={{ fontSize: "0.55rem", letterSpacing: "0.1em", textTransform: "uppercase", color: SHARED_COLOR, marginRight: 10, marginTop: 4, whiteSpace: "nowrap" }}>shared</div>
+      {/* Shared */}
+      <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 8 }}>
+        <div style={{ fontSize: "0.5rem", letterSpacing: "0.1em", textTransform: "uppercase", color: SHARED_COLOR, marginRight: 8, marginTop: 3, whiteSpace: "nowrap" }}>shared</div>
         <div style={{ display: "flex", alignItems: "center", flex: 1 }}>
-          {sharedSteps.map((s, i) => (
-            <div key={s.id} style={{ display: "flex", alignItems: "center", flex: i < sharedSteps.length - 1 ? 1 : 0 }}>
-              <Dot {...s} />
-              {i < sharedSteps.length - 1 && <Line color={s.color} done={statuses[s.id] === "done"} />}
-            </div>
-          ))}
+          <Dot id="cartographer" label="Oral Exegesis" color={SHARED_COLOR} />
+          <Line color={SHARED_COLOR} done={statuses.cartographer === "done"} />
+          <Dot id="analyst" label="Oral Patterns" color={SHARED_COLOR} />
         </div>
       </div>
-
-      {/* Track steps */}
-      <div style={{ display: "grid", gridTemplateColumns: tracks.faithful && tracks.commented ? "1fr 1fr" : "1fr", gap: 8, paddingLeft: 42 }}>
+      {/* Tracks */}
+      <div style={{ display: "grid", gridTemplateColumns: tracks.faithful && tracks.commented ? "1fr 1fr" : "1fr", gap: 8, paddingLeft: 40 }}>
         {tracks.faithful && (
           <div>
-            <div style={{ fontSize: "0.52rem", letterSpacing: "0.1em", textTransform: "uppercase", color: FAITHFUL_COLOR, marginBottom: 4 }}>oral scripture</div>
+            <div style={{ fontSize: "0.48rem", letterSpacing: "0.1em", textTransform: "uppercase", color: FAITHFUL_COLOR, marginBottom: 4 }}>translation</div>
             <div style={{ display: "flex", alignItems: "center" }}>
-              {faithfulSteps.map((s, i) => (
-                <div key={s.id} style={{ display: "flex", alignItems: "center", flex: i < faithfulSteps.length - 1 ? 1 : 0 }}>
-                  <Dot {...s} />
-                  {i < faithfulSteps.length - 1 && <Line color={s.color} done={statuses[s.id] === "done"} />}
-                </div>
-              ))}
+              <Dot id="faithful_reconstructor" label="Oral Reconstruction" color={FAITHFUL_COLOR} />
+              <Line color={FAITHFUL_COLOR} done={statuses.faithful_reconstructor === "done"} />
+              <Dot id="faithful_framer" label="Oral Frames" color={FAITHFUL_COLOR} />
+              <Line color={FAITHFUL_COLOR} done={statuses.faithful_framer === "done"} />
+              <Dot id="checker" label="Accuracy Check" color={FAITHFUL_COLOR} />
             </div>
           </div>
         )}
         {tracks.commented && (
           <div>
-            <div style={{ fontSize: "0.52rem", letterSpacing: "0.1em", textTransform: "uppercase", color: COMMENTED_COLOR, marginBottom: 4 }}>commented scripture</div>
+            <div style={{ fontSize: "0.48rem", letterSpacing: "0.1em", textTransform: "uppercase", color: COMMENTED_COLOR, marginBottom: 4 }}>commentary</div>
             <div style={{ display: "flex", alignItems: "center" }}>
-              {commentedSteps.map((s, i) => (
-                <div key={s.id} style={{ display: "flex", alignItems: "center", flex: i < commentedSteps.length - 1 ? 1 : 0 }}>
-                  <Dot {...s} />
-                  {i < commentedSteps.length - 1 && <Line color={s.color} done={statuses[s.id] === "done"} />}
-                </div>
-              ))}
+              <Dot id="commented_reconstructor" label="Oral Reconstruction" color={COMMENTED_COLOR} />
+              <Line color={COMMENTED_COLOR} done={statuses.commented_reconstructor === "done"} />
+              <Dot id="commented_framer" label="Oral Frames" color={COMMENTED_COLOR} />
             </div>
           </div>
         )}
@@ -395,14 +384,14 @@ function ProgressStrip({ statuses, streaming, tracks }: {
 // ─── Upload Panel ──────────────────────────────────────────────
 
 function UploadPanel({ onStart }: {
-  onStart: (mapContent: string, language: string, communityContext: string, passage: string, tracks: { faithful: boolean; commented: boolean }) => void;
+  onStart: (mapContent: string, language: string, communityContext: string, passage: string, tracks: Tracks) => void;
 }) {
   const [mapText, setMapText] = useState("");
   const [language, setLanguage] = useState("pt-BR");
   const [communityContext, setCommunityContext] = useState("");
   const [passage, setPassage] = useState("");
   const [dragOver, setDragOver] = useState(false);
-  const [tracks, setTracks] = useState({ faithful: true, commented: true });
+  const [tracks, setTracks] = useState<Tracks>({ faithful: true, commented: true });
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (file: File) => {
@@ -410,7 +399,6 @@ function UploadPanel({ onStart }: {
     reader.onload = (e) => setMapText((e.target?.result as string) || "");
     reader.readAsText(file);
   };
-
   const mapOk = mapText.trim().length > 100;
   const contextOk = communityContext.trim().length > 5;
   const tracksOk = tracks.faithful || tracks.commented;
@@ -418,15 +406,15 @@ function UploadPanel({ onStart }: {
   const wordCount = mapText.split(/\s+/).filter(Boolean).length;
 
   return (
-    <div style={{ maxWidth: 620, margin: "0 auto", padding: "44px 24px 80px" }}>
-      <div style={{ textAlign: "center", marginBottom: 36 }}>
-        <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(1.9rem, 4vw, 2.6rem)", fontWeight: 700, color: "var(--amber-pale)", lineHeight: 1.15, marginBottom: 12 }}>
+    <div style={{ maxWidth: 600, margin: "0 auto", padding: "44px 24px 80px" }}>
+      <div style={{ textAlign: "center", marginBottom: 34 }}>
+        <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(1.8rem, 4vw, 2.5rem)", fontWeight: 700, color: "var(--amber-pale)", lineHeight: 1.15, marginBottom: 10 }}>
           From meaning to voice
         </h1>
-        <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", lineHeight: 1.75, maxWidth: 460, margin: "0 auto 10px" }}>
-          Upload a validated Prose Meaning Map and select which outputs to generate.
+        <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", lineHeight: 1.7, maxWidth: 440, margin: "0 auto 10px" }}>
+          Upload a validated Prose Meaning Map and choose which tracks to generate.
         </p>
-        <div style={{ display: "inline-flex", gap: 10, fontSize: "0.62rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate-muted)" }}>
+        <div style={{ display: "inline-flex", gap: 10, fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate-muted)" }}>
           <span>OBT Lab</span><span style={{ color: "var(--amber-gold)" }}>·</span>
           <span>Shema Bible Translation</span><span style={{ color: "var(--amber-gold)" }}>·</span>
           <span>Tripod Method</span>
@@ -434,27 +422,22 @@ function UploadPanel({ onStart }: {
       </div>
 
       {/* Drop zone */}
-      <div
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onClick={() => fileRef.current?.click()}
-        style={{ border: `1.5px dashed ${dragOver ? "var(--amber-gold)" : mapOk ? "rgba(201,146,42,0.5)" : "var(--ink-600)"}`, borderRadius: 8, padding: "20px", textAlign: "center", cursor: "pointer", marginBottom: 14, background: dragOver ? "rgba(201,146,42,0.06)" : "rgba(27,31,46,0.35)", transition: "all 0.2s ease" }}
-      >
+      <div onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }} onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onClick={() => fileRef.current?.click()}
+        style={{ border: `1.5px dashed ${dragOver ? "var(--amber-gold)" : mapOk ? "rgba(201,146,42,0.5)" : "var(--ink-600)"}`, borderRadius: 8, padding: "20px", textAlign: "center", cursor: "pointer", marginBottom: 12, background: dragOver ? "rgba(201,146,42,0.06)" : "rgba(27,31,46,0.3)", transition: "all 0.2s ease" }}>
         <div style={{ fontSize: "1.2rem", color: mapOk ? "var(--amber-gold)" : "var(--slate-muted)", marginBottom: 4 }}>{mapOk ? "✓" : "↑"}</div>
-        <div style={{ fontSize: "0.84rem", color: "var(--slate-light)", marginBottom: 2 }}>
+        <div style={{ fontSize: "0.83rem", color: "var(--slate-light)", marginBottom: 2 }}>
           {mapOk ? `${wordCount.toLocaleString()} words loaded — click to replace` : "Drop your Prose Meaning Map here, or click to browse"}
         </div>
-        <div style={{ fontSize: "0.7rem", color: "var(--slate-muted)" }}>.txt · .md · .json</div>
+        <div style={{ fontSize: "0.68rem", color: "var(--slate-muted)" }}>.txt · .md · .json</div>
         <input ref={fileRef} type="file" accept=".txt,.md,.json" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
       </div>
 
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Or paste the map</label>
-        <textarea value={mapText} onChange={(e) => setMapText(e.target.value)} rows={4} placeholder="Paste your validated Prose Meaning Map here…" style={{ ...textareaBase, fontFamily: "'JetBrains Mono', monospace", fontSize: "0.76rem", borderColor: mapOk ? "rgba(201,146,42,0.4)" : "var(--ink-600)" }} />
+        <textarea value={mapText} onChange={(e) => setMapText(e.target.value)} rows={4} placeholder="Paste your validated Prose Meaning Map here…" style={{ ...textareaBase, fontFamily: "'JetBrains Mono', monospace", fontSize: "0.75rem", borderColor: mapOk ? "rgba(201,146,42,0.4)" : "var(--ink-700)" }} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
         <div>
           <label style={labelStyle}>Passage reference</label>
           <input type="text" value={passage} onChange={(e) => setPassage(e.target.value)} placeholder="e.g. Ruth 1:1–7" style={inputBase} />
@@ -471,35 +454,34 @@ function UploadPanel({ onStart }: {
         <label style={labelStyle}>Community context <span style={{ color: "var(--amber-gold)" }}>*</span></label>
         <textarea value={communityContext} onChange={(e) => setCommunityContext(e.target.value)} rows={2}
           placeholder={`e.g. Rural ${getLangLabel(language)}-speaking community in [region] — oral storytelling tradition`}
-          style={{ ...textareaBase, fontSize: "0.875rem", borderColor: contextOk ? "rgba(201,146,42,0.4)" : "var(--ink-600)" }}
-        />
+          style={{ ...textareaBase, fontSize: "0.875rem", borderColor: contextOk ? "rgba(201,146,42,0.4)" : "var(--ink-700)" }} />
       </div>
 
       {/* Track selection */}
       <div style={{ marginBottom: 22 }}>
-        <label style={labelStyle}>Outputs to generate</label>
+        <label style={labelStyle}>Output tracks</label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {[
-            { key: "faithful" as const, label: "Oral Scripture", sub: "Faithful · consultant-approvable", color: FAITHFUL_COLOR },
-            { key: "commented" as const, label: "Commented Scripture", sub: "Rich · contextual · explanatory", color: COMMENTED_COLOR },
-          ].map(t => (
+          {([
+            { key: "faithful" as const, label: "Translation", sub: "Faithful · consultant-approvable", color: FAITHFUL_COLOR },
+            { key: "commented" as const, label: "Commentary", sub: "Rich · contextual · explanatory", color: COMMENTED_COLOR },
+          ]).map(t => (
             <div key={t.key} onClick={() => setTracks(prev => ({ ...prev, [t.key]: !prev[t.key] }))}
-              style={{ padding: "12px 14px", border: `1.5px solid ${tracks[t.key] ? t.color : "var(--ink-600)"}`, borderRadius: 7, cursor: "pointer", background: tracks[t.key] ? `${t.color}10` : "rgba(19,22,32,0.4)", transition: "all 0.2s ease" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                <div style={{ width: 14, height: 14, borderRadius: 3, border: `1.5px solid ${tracks[t.key] ? t.color : "var(--ink-600)"}`, background: tracks[t.key] ? t.color : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.55rem", color: "var(--ink-950)", transition: "all 0.2s ease" }}>
+              style={{ padding: "11px 13px", border: `1.5px solid ${tracks[t.key] ? t.color : "var(--ink-600)"}`, borderRadius: 7, cursor: "pointer", background: tracks[t.key] ? `${t.color}0e` : "rgba(19,22,32,0.4)", transition: "all 0.2s ease" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 2 }}>
+                <div style={{ width: 13, height: 13, borderRadius: 3, border: `1.5px solid ${tracks[t.key] ? t.color : "var(--ink-600)"}`, background: tracks[t.key] ? t.color : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.52rem", color: "var(--ink-950)", flexShrink: 0 }}>
                   {tracks[t.key] ? "✓" : ""}
                 </div>
-                <span style={{ fontSize: "0.8rem", fontWeight: 600, color: tracks[t.key] ? "var(--text-primary)" : "var(--slate-muted)" }}>{t.label}</span>
+                <span style={{ fontSize: "0.82rem", fontWeight: 600, color: tracks[t.key] ? "var(--text-primary)" : "var(--slate-muted)" }}>{t.label}</span>
               </div>
-              <div style={{ fontSize: "0.68rem", color: tracks[t.key] ? t.color : "var(--ink-600)", paddingLeft: 22 }}>{t.sub}</div>
+              <div style={{ fontSize: "0.67rem", color: tracks[t.key] ? t.color : "var(--ink-600)", paddingLeft: 20 }}>{t.sub}</div>
             </div>
           ))}
         </div>
-        {!tracksOk && <p style={{ fontSize: "0.72rem", color: "#e88", marginTop: 6 }}>Select at least one output.</p>}
+        {!tracksOk && <p style={{ fontSize: "0.7rem", color: "#e88", marginTop: 6 }}>Select at least one track.</p>}
       </div>
 
       <button disabled={!canStart} onClick={() => onStart(mapText, language, communityContext, passage, tracks)}
-        style={{ width: "100%", padding: "13px 24px", background: canStart ? "linear-gradient(135deg, var(--amber-gold), #a97420)" : "var(--ink-700)", border: "none", borderRadius: 6, color: canStart ? "var(--ink-950)" : "var(--slate-muted)", fontFamily: "'Playfair Display', serif", fontSize: "0.95rem", fontWeight: 600, cursor: canStart ? "pointer" : "not-allowed", transition: "all 0.2s ease" }}>
+        style={{ width: "100%", padding: "12px 24px", background: canStart ? "linear-gradient(135deg, var(--amber-gold), #a97420)" : "var(--ink-700)", border: "none", borderRadius: 6, color: canStart ? "var(--ink-950)" : "var(--slate-muted)", fontFamily: "'Playfair Display', serif", fontSize: "0.95rem", fontWeight: 600, cursor: canStart ? "pointer" : "not-allowed", transition: "all 0.2s ease" }}>
         {canStart ? "Begin Pipeline →" : "Complete required fields to continue"}
       </button>
     </div>
@@ -510,8 +492,10 @@ function UploadPanel({ onStart }: {
 
 export default function OralBridgePage() {
   const [phase, setPhase] = useState<"upload" | "pipeline">("upload");
-  const [audioOpen, setAudioOpen] = useState(false);
-  const [activeTracks, setActiveTracks] = useState({ faithful: true, commented: true });
+  const [activeTracks, setActiveTracks] = useState<Tracks>({ faithful: true, commented: true });
+  // Track audio readiness independently per track
+  const [faithfulAudioReady, setFaithfulAudioReady] = useState(false);
+  const [commentedAudioReady, setCommentedAudioReady] = useState(false);
 
   const [pipelineState, setPipelineState] = useState<PipelineState>({
     mapContent: "", targetLanguage: "", communityContext: "", passageReference: "",
@@ -528,16 +512,14 @@ export default function OralBridgePage() {
     faithful_reconstructor: "pending", commented_reconstructor: "pending",
     faithful_framer: "pending", commented_framer: "pending", checker: "pending",
   }));
-
   const [stepErrors, setStepErrors] = useState<Record<AgentStep, string>>(() => ({
     cartographer: "", analyst: "",
     faithful_reconstructor: "", commented_reconstructor: "",
     faithful_framer: "", commented_framer: "", checker: "",
   }));
-
   const [streamingStep, setStreamingStep] = useState<AgentStep | null>(null);
 
-  const handleStart = (mapContent: string, language: string, communityContext: string, passage: string, tracks: { faithful: boolean; commented: boolean }) => {
+  const handleStart = (mapContent: string, language: string, communityContext: string, passage: string, tracks: Tracks) => {
     const fresh: PipelineState = {
       mapContent, targetLanguage: language, communityContext, passageReference: passage,
       semanticInventory: "", oralBlueprint: "",
@@ -547,13 +529,14 @@ export default function OralBridgePage() {
     setPipelineState(fresh);
     stateRef.current = fresh;
     setActiveTracks(tracks);
+    setFaithfulAudioReady(false);
+    setCommentedAudioReady(false);
     setStepStatuses({
       cartographer: "active", analyst: "pending",
       faithful_reconstructor: "pending", commented_reconstructor: "pending",
       faithful_framer: "pending", commented_framer: "pending", checker: "pending",
     });
     setStepErrors({ cartographer: "", analyst: "", faithful_reconstructor: "", commented_reconstructor: "", faithful_framer: "", commented_framer: "", checker: "" });
-    setAudioOpen(false);
     setPhase("pipeline");
   };
 
@@ -586,8 +569,7 @@ export default function OralBridgePage() {
         const { done, value } = await reader.read();
         if (done) break;
         accumulated += decoder.decode(value, { stream: true });
-        const snap = accumulated;
-        setPipelineState(prev => ({ ...prev, [outputKey]: snap }));
+        setPipelineState(prev => ({ ...prev, [outputKey]: accumulated }));
       }
       setStepStatuses(prev => ({ ...prev, [step]: "active" }));
     } catch (err) {
@@ -596,86 +578,73 @@ export default function OralBridgePage() {
     } finally { setStreamingStep(null); }
   }, []);
 
-  const approveStep = useCallback((step: AgentStep, tracks: { faithful: boolean; commented: boolean }) => {
+  // ── Approval transitions — simple, direct, per-track ──────────
+  // Each track flows independently after the shared steps.
+  // Approving one track never blocks or waits for the other.
+  const approveStep = useCallback((step: AgentStep) => {
     setStepStatuses(prev => ({ ...prev, [step]: "done" }));
 
-    if (step === "cartographer") {
-      setStepStatuses(prev => ({ ...prev, analyst: "active" }));
-      return;
-    }
+    switch (step) {
+      // ── Shared ──────────────────────────────────────────────
+      case "cartographer":
+        setStepStatuses(prev => ({ ...prev, analyst: "active" }));
+        break;
 
-    if (step === "analyst") {
-      const next: Partial<Record<AgentStep, StepStatus>> = {};
-      if (tracks.faithful) next.faithful_reconstructor = "active";
-      if (tracks.commented) next.commented_reconstructor = "active";
-      setStepStatuses(prev => ({ ...prev, ...next }));
-      return;
-    }
+      case "analyst":
+        setStepStatuses(prev => ({
+          ...prev,
+          ...(activeTracks.faithful ? { faithful_reconstructor: "active" } : {}),
+          ...(activeTracks.commented ? { commented_reconstructor: "active" } : {}),
+        }));
+        break;
 
-    const activateFramers = (prev: Record<AgentStep, StepStatus>, updatedStep: AgentStep) => {
-      const updated = { ...prev, [updatedStep]: "done" as StepStatus };
-      const faithfulDone = !tracks.faithful || updated.faithful_reconstructor === "done";
-      const commentedDone = !tracks.commented || updated.commented_reconstructor === "done";
-      if (faithfulDone && commentedDone) {
-        if (tracks.faithful) updated.faithful_framer = "active";
-        if (tracks.commented) updated.commented_framer = "active";
+      // ── Translation track ────────────────────────────────────
+      case "faithful_reconstructor":
+        setStepStatuses(prev => ({ ...prev, faithful_framer: "active" }));
+        break;
+
+      case "faithful_framer":
+        setStepStatuses(prev => ({ ...prev, checker: "active" }));
+        break;
+
+      case "checker": {
+        const st = stateRef.current;
+        setPipelineState(p => ({ ...p, faithfulFinalText: stripFramingTags(st.faithfulFramed || st.faithfulReconstruction) }));
+        setFaithfulAudioReady(true);
+        setTimeout(() => { document.getElementById("audio-section")?.scrollIntoView({ behavior: "smooth" }); }, 120);
+        break;
       }
-      return updated;
-    };
 
-    if (step === "faithful_reconstructor" || step === "commented_reconstructor") {
-      setStepStatuses(prev => activateFramers(prev, step));
-      return;
-    }
+      // ── Commentary track ─────────────────────────────────────
+      case "commented_reconstructor":
+        setStepStatuses(prev => ({ ...prev, commented_framer: "active" }));
+        break;
 
-    const activateChecker = (prev: Record<AgentStep, StepStatus>, updatedStep: AgentStep) => {
-      const updated = { ...prev, [updatedStep]: "done" as StepStatus };
-      const faithfulDone = !tracks.faithful || updated.faithful_framer === "done";
-      const commentedDone = !tracks.commented || updated.commented_framer === "done";
-      if (faithfulDone && commentedDone) {
-        if (tracks.faithful) updated.checker = "active";
-        else {
-          // No faithful track — pipeline complete
-          const st = stateRef.current;
-          setPipelineState(p => ({ ...p, commentedFinalText: stripFramingTags(st.commentedFramed || st.commentedReconstruction) }));
-          setAudioOpen(true);
-          setTimeout(() => { document.getElementById("audio-section")?.scrollIntoView({ behavior: "smooth" }); }, 120);
-        }
+      case "commented_framer": {
+        const st = stateRef.current;
+        setPipelineState(p => ({ ...p, commentedFinalText: stripFramingTags(st.commentedFramed || st.commentedReconstruction) }));
+        setCommentedAudioReady(true);
+        setTimeout(() => { document.getElementById("audio-section")?.scrollIntoView({ behavior: "smooth" }); }, 120);
+        break;
       }
-      return updated;
-    };
-
-    if (step === "faithful_framer" || step === "commented_framer") {
-      setStepStatuses(prev => activateChecker(prev, step));
-      return;
     }
-
-    if (step === "checker") {
-      const st = stateRef.current;
-      setPipelineState(p => ({
-        ...p,
-        faithfulFinalText: stripFramingTags(st.faithfulFramed || st.faithfulReconstruction),
-        commentedFinalText: stripFramingTags(st.commentedFramed || st.commentedReconstruction),
-      }));
-      setAudioOpen(true);
-      setTimeout(() => { document.getElementById("audio-section")?.scrollIntoView({ behavior: "smooth" }); }, 120);
-    }
-  }, []);
+  }, [activeTracks]);
 
   const editOutput = useCallback((step: AgentStep, value: string) => {
     setPipelineState(prev => ({ ...prev, [outputKeyForStep(step)]: value }));
   }, []);
 
-  // Descriptions
   const descriptions: Record<AgentStep, string> = {
-    cartographer: "Reads the map and produces Section A (Level 3 propositions — renderable content) and Section B (Levels 1–2 — performance world). This separation enforces faithfulness.",
-    analyst: "Identifies authentic oral narrative conventions of the target community — discourse connectors, participant tracking, speech framing, climax marking.",
-    faithful_reconstructor: "Tells the passage using ONLY Section A content. The subtraction test applies to every sentence. This is the translation.",
-    commented_reconstructor: "Tells and illuminates the passage as an elder would — weaving text and world together, drawing freely from both sections.",
-    faithful_framer: "Adds oral metadiscourse (attentional, structural, turn-taking markers) governed by the subtraction rule. No content added.",
-    commented_framer: "Adds oral metadiscourse to help listeners follow the richer, contextual telling.",
-    checker: "Checks the faithful reconstruction for completeness (all Level 3 elements present) and faithfulness (nothing beyond Level 3 added).",
+    cartographer: "Reads the Prose Meaning Map and produces two sections: Section A (Level 3 propositions — the only content that may be spoken) and Section B (Levels 1–2 — the performance world that shapes register and emotional weight without contributing spoken content).",
+    analyst: "Identifies authentic oral narrative conventions of the target community — discourse connectors, participant tracking, speech framing, climax marking, and the register features that distinguish oral from written.",
+    faithful_reconstructor: "Tells the passage using ONLY Section A content. The subtraction test applies to every sentence: if it is not in Section A, it is deleted. This is the Translation.",
+    commented_reconstructor: "Tells and illuminates the passage as a master elder would — weaving the text and its world together, drawing freely from both sections. This is the Commentary.",
+    faithful_framer: "Adds oral metadiscourse (attentional, structural, turn-taking markers) to the Translation. Governed by the subtraction rule — no content is added.",
+    commented_framer: "Adds oral metadiscourse to the Commentary to help listeners follow the richer, contextual telling.",
+    checker: "Checks the Translation for completeness (every Level 3 element is present) and faithfulness (nothing beyond Level 3 was added).",
   };
+
+  const audioOpen = faithfulAudioReady || commentedAudioReady;
 
   return (
     <div style={{ minHeight: "100vh", position: "relative", zIndex: 1 }}>
@@ -689,11 +658,11 @@ export default function OralBridgePage() {
           </div>
         </div>
         {phase === "pipeline" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {pipelineState.passageReference && <span style={{ fontFamily: "'Playfair Display', serif", color: "var(--amber-pale)", fontSize: "0.85rem" }}>{pipelineState.passageReference}</span>}
-            <span style={{ color: "var(--slate-muted)", fontSize: "0.75rem" }}>·</span>
+            <span style={{ color: "var(--slate-muted)" }}>·</span>
             <span style={{ color: "var(--amber-warm)", fontSize: "0.8rem" }}>{getLangLabel(pipelineState.targetLanguage)}</span>
-            <button onClick={() => { setPhase("upload"); setAudioOpen(false); }} style={{ ...ghostBtn, marginLeft: 8, fontSize: "0.72rem", padding: "4px 10px" }}>← New map</button>
+            <button onClick={() => setPhase("upload")} style={{ ...ghostBtn, fontSize: "0.7rem", padding: "4px 10px", marginLeft: 6 }}>← New map</button>
           </div>
         )}
       </header>
@@ -704,88 +673,80 @@ export default function OralBridgePage() {
         <>
           <ProgressStrip statuses={stepStatuses} streaming={streamingStep} tracks={activeTracks} />
 
-          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 20px 80px" }}>
+          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "18px 18px 80px" }}>
 
-            {/* Shared steps — full width */}
-            <Section title="Shared Analysis" color={SHARED_COLOR} icon="◈" status={stepStatuses.analyst === "done" ? "complete" : stepStatuses.cartographer === "running" || stepStatuses.analyst === "running" ? "running…" : "in progress"} defaultOpen={stepStatuses.analyst !== "done"}>
-              <AgentStep step="cartographer" label="Semantic Cartographer" description={descriptions.cartographer}
-                status={stepStatuses.cartographer} output={pipelineState.semanticInventory} isStreaming={streamingStep === "cartographer"}
-                error={stepErrors.cartographer} color={SHARED_COLOR}
-                onRun={() => runStep("cartographer")} onEdit={(v) => editOutput("cartographer", v)} onApprove={() => approveStep("cartographer", activeTracks)} />
-              <AgentStep step="analyst" label="Oral Pattern Analyst" description={descriptions.analyst}
-                status={stepStatuses.analyst} output={pipelineState.oralBlueprint} isStreaming={streamingStep === "analyst"}
-                error={stepErrors.analyst} color={SHARED_COLOR}
-                onRun={() => runStep("analyst")} onEdit={(v) => editOutput("analyst", v)} onApprove={() => approveStep("analyst", activeTracks)} />
+            {/* Shared section */}
+            <Section title="Shared Analysis" subtitle="Oral Exegesis · Oral Patterns" color={SHARED_COLOR} icon="◈"
+              badge={stepStatuses.analyst === "done" ? "complete" : "in progress"}
+              defaultOpen={stepStatuses.analyst !== "done"}>
+              <AgentStep step="cartographer" label={STEP_FULL_LABELS.cartographer} description={descriptions.cartographer}
+                status={stepStatuses.cartographer} output={pipelineState.semanticInventory}
+                isStreaming={streamingStep === "cartographer"} error={stepErrors.cartographer} color={SHARED_COLOR}
+                onRun={() => runStep("cartographer")} onEdit={v => editOutput("cartographer", v)} onApprove={() => approveStep("cartographer")} />
+              <AgentStep step="analyst" label={STEP_FULL_LABELS.analyst} description={descriptions.analyst}
+                status={stepStatuses.analyst} output={pipelineState.oralBlueprint}
+                isStreaming={streamingStep === "analyst"} error={stepErrors.analyst} color={SHARED_COLOR}
+                onRun={() => runStep("analyst")} onEdit={v => editOutput("analyst", v)} onApprove={() => approveStep("analyst")} />
             </Section>
 
-            {/* Two-column track section */}
-            {(activeTracks.faithful || activeTracks.commented) && (
-              <div style={{ display: "grid", gridTemplateColumns: activeTracks.faithful && activeTracks.commented ? "1fr 1fr" : "1fr", gap: 14, marginTop: 4 }}>
+            {/* Two-column tracks */}
+            <div style={{ display: "grid", gridTemplateColumns: activeTracks.faithful && activeTracks.commented ? "1fr 1fr" : "1fr", gap: 14, marginTop: 4 }}>
 
-                {/* Faithful track */}
-                {activeTracks.faithful && (
-                  <div>
-                    <Section title="Oral Scripture" color={FAITHFUL_COLOR} icon="◎"
-                      status={stepStatuses.checker === "done" ? "complete" : stepStatuses.faithful_reconstructor === "pending" ? "waiting for analysis" : "in progress"}
-                      defaultOpen={true}>
-                      <AgentStep step="faithful_reconstructor" label="Faithful Reconstructor" description={descriptions.faithful_reconstructor}
-                        status={stepStatuses.faithful_reconstructor} output={pipelineState.faithfulReconstruction} isStreaming={streamingStep === "faithful_reconstructor"}
-                        error={stepErrors.faithful_reconstructor} color={FAITHFUL_COLOR}
-                        onRun={() => runStep("faithful_reconstructor")} onEdit={(v) => editOutput("faithful_reconstructor", v)} onApprove={() => approveStep("faithful_reconstructor", activeTracks)} />
-                      <AgentStep step="faithful_framer" label="Faithful Framer" description={descriptions.faithful_framer}
-                        status={stepStatuses.faithful_framer} output={pipelineState.faithfulFramed} isStreaming={streamingStep === "faithful_framer"}
-                        error={stepErrors.faithful_framer} color={FAITHFUL_COLOR}
-                        onRun={() => runStep("faithful_framer")} onEdit={(v) => editOutput("faithful_framer", v)} onApprove={() => approveStep("faithful_framer", activeTracks)} />
-                      <AgentStep step="checker" label="Fidelity Checker" description={descriptions.checker}
-                        status={stepStatuses.checker} output={pipelineState.fidelityReport} isStreaming={streamingStep === "checker"}
-                        error={stepErrors.checker} color={FAITHFUL_COLOR}
-                        onRun={() => runStep("checker")} onEdit={(v) => editOutput("checker", v)} onApprove={() => approveStep("checker", activeTracks)} />
-                    </Section>
-                  </div>
-                )}
+              {activeTracks.faithful && (
+                <Section title="Translation" subtitle="Faithful · consultant-approvable" color={FAITHFUL_COLOR} icon="◎"
+                  badge={stepStatuses.checker === "done" ? "complete" : stepStatuses.faithful_reconstructor === "pending" ? "waiting" : "in progress"}>
+                  <AgentStep step="faithful_reconstructor" label={STEP_FULL_LABELS.faithful_reconstructor} description={descriptions.faithful_reconstructor}
+                    status={stepStatuses.faithful_reconstructor} output={pipelineState.faithfulReconstruction}
+                    isStreaming={streamingStep === "faithful_reconstructor"} error={stepErrors.faithful_reconstructor} color={FAITHFUL_COLOR}
+                    onRun={() => runStep("faithful_reconstructor")} onEdit={v => editOutput("faithful_reconstructor", v)} onApprove={() => approveStep("faithful_reconstructor")} />
+                  <AgentStep step="faithful_framer" label={STEP_FULL_LABELS.faithful_framer} description={descriptions.faithful_framer}
+                    status={stepStatuses.faithful_framer} output={pipelineState.faithfulFramed}
+                    isStreaming={streamingStep === "faithful_framer"} error={stepErrors.faithful_framer} color={FAITHFUL_COLOR}
+                    onRun={() => runStep("faithful_framer")} onEdit={v => editOutput("faithful_framer", v)} onApprove={() => approveStep("faithful_framer")} />
+                  <AgentStep step="checker" label={STEP_FULL_LABELS.checker} description={descriptions.checker}
+                    status={stepStatuses.checker} output={pipelineState.fidelityReport}
+                    isStreaming={streamingStep === "checker"} error={stepErrors.checker} color={FAITHFUL_COLOR}
+                    onRun={() => runStep("checker")} onEdit={v => editOutput("checker", v)} onApprove={() => approveStep("checker")} />
+                </Section>
+              )}
 
-                {/* Commented track */}
-                {activeTracks.commented && (
-                  <div>
-                    <Section title="Commented Scripture" color={COMMENTED_COLOR} icon="◍"
-                      status={stepStatuses.commented_framer === "done" ? "complete" : stepStatuses.commented_reconstructor === "pending" ? "waiting for analysis" : "in progress"}
-                      defaultOpen={true}>
-                      <AgentStep step="commented_reconstructor" label="Commented Reconstructor" description={descriptions.commented_reconstructor}
-                        status={stepStatuses.commented_reconstructor} output={pipelineState.commentedReconstruction} isStreaming={streamingStep === "commented_reconstructor"}
-                        error={stepErrors.commented_reconstructor} color={COMMENTED_COLOR}
-                        onRun={() => runStep("commented_reconstructor")} onEdit={(v) => editOutput("commented_reconstructor", v)} onApprove={() => approveStep("commented_reconstructor", activeTracks)} />
-                      <AgentStep step="commented_framer" label="Commented Framer" description={descriptions.commented_framer}
-                        status={stepStatuses.commented_framer} output={pipelineState.commentedFramed} isStreaming={streamingStep === "commented_framer"}
-                        error={stepErrors.commented_framer} color={COMMENTED_COLOR}
-                        onRun={() => runStep("commented_framer")} onEdit={(v) => editOutput("commented_framer", v)} onApprove={() => approveStep("commented_framer", activeTracks)} />
-                    </Section>
-                  </div>
-                )}
-              </div>
-            )}
+              {activeTracks.commented && (
+                <Section title="Commentary" subtitle="Rich · contextual · explanatory" color={COMMENTED_COLOR} icon="◍"
+                  badge={stepStatuses.commented_framer === "done" ? "complete" : stepStatuses.commented_reconstructor === "pending" ? "waiting" : "in progress"}>
+                  <AgentStep step="commented_reconstructor" label={STEP_FULL_LABELS.commented_reconstructor} description={descriptions.commented_reconstructor}
+                    status={stepStatuses.commented_reconstructor} output={pipelineState.commentedReconstruction}
+                    isStreaming={streamingStep === "commented_reconstructor"} error={stepErrors.commented_reconstructor} color={COMMENTED_COLOR}
+                    onRun={() => runStep("commented_reconstructor")} onEdit={v => editOutput("commented_reconstructor", v)} onApprove={() => approveStep("commented_reconstructor")} />
+                  <AgentStep step="commented_framer" label={STEP_FULL_LABELS.commented_framer} description={descriptions.commented_framer}
+                    status={stepStatuses.commented_framer} output={pipelineState.commentedFramed}
+                    isStreaming={streamingStep === "commented_framer"} error={stepErrors.commented_framer} color={COMMENTED_COLOR}
+                    onRun={() => runStep("commented_framer")} onEdit={v => editOutput("commented_framer", v)} onApprove={() => approveStep("commented_framer")} />
+                </Section>
+              )}
+            </div>
 
-            {/* Audio outputs */}
+            {/* Audio outputs — appear independently as each track completes */}
             {audioOpen && (
               <div id="audio-section">
-                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "24px 0 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "22px 0 14px" }}>
                   <div style={{ height: 1, flex: 1, background: "linear-gradient(to right, transparent, var(--amber-gold))" }} />
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 14px", background: "rgba(201,146,42,0.1)", border: "1px solid var(--amber-gold)", borderRadius: 20, color: "var(--amber-warm)", fontSize: "0.74rem" }}>
-                    <span>✓</span><span>Pipeline complete</span>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 14px", background: "rgba(201,146,42,0.1)", border: "1px solid var(--amber-gold)", borderRadius: 20, color: "var(--amber-warm)", fontSize: "0.73rem" }}>
+                    ✓ Audio ready
                   </div>
                   <div style={{ height: 1, flex: 1, background: "linear-gradient(to left, transparent, var(--amber-gold))" }} />
                 </div>
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-                  <button onClick={() => exportJSON(pipelineState)} style={ghostBtn}>↓ Export full pipeline .json</button>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+                  <button onClick={() => exportJSON(pipelineState)} style={ghostBtn}>↓ Export pipeline .json</button>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: activeTracks.faithful && activeTracks.commented ? "1fr 1fr" : "1fr", gap: 14 }}>
-                  {activeTracks.faithful && (
-                    <AudioPanel title="Oral Scripture" color={FAITHFUL_COLOR} trackId="faithful"
+                <div style={{ display: "grid", gridTemplateColumns: faithfulAudioReady && commentedAudioReady ? "1fr 1fr" : "1fr", gap: 14 }}>
+                  {faithfulAudioReady && (
+                    <AudioPanel title="Translation" color={FAITHFUL_COLOR} trackId="faithful"
                       text={pipelineState.faithfulFinalText || stripFramingTags(pipelineState.faithfulFramed || pipelineState.faithfulReconstruction)}
                       passageRef={pipelineState.passageReference} langCode={pipelineState.targetLanguage}
                       onExportTXT={() => exportTXT(pipelineState, "faithful")} />
                   )}
-                  {activeTracks.commented && (
-                    <AudioPanel title="Commented Scripture" color={COMMENTED_COLOR} trackId="commented"
+                  {commentedAudioReady && (
+                    <AudioPanel title="Commentary" color={COMMENTED_COLOR} trackId="commented"
                       text={pipelineState.commentedFinalText || stripFramingTags(pipelineState.commentedFramed || pipelineState.commentedReconstruction)}
                       passageRef={pipelineState.passageReference} langCode={pipelineState.targetLanguage}
                       onExportTXT={() => exportTXT(pipelineState, "commented")} />
@@ -797,7 +758,7 @@ export default function OralBridgePage() {
         </>
       )}
 
-      <div style={{ textAlign: "center", padding: "16px 24px", borderTop: "1px solid var(--ink-700)", color: "var(--slate-muted)", fontSize: "0.62rem", letterSpacing: "0.06em" }}>
+      <div style={{ textAlign: "center", padding: "16px 24px", borderTop: "1px solid var(--ink-700)", color: "var(--slate-muted)", fontSize: "0.6rem", letterSpacing: "0.06em" }}>
         Tripod Method · OBT Lab · Shema Bible Translation · YWAM Kansas City
       </div>
     </div>
