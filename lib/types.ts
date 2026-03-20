@@ -3,8 +3,10 @@
 export type AgentStep =
   | "cartographer"
   | "analyst"
-  | "reconstructor"
-  | "framer"
+  | "faithful_reconstructor"
+  | "commented_reconstructor"
+  | "faithful_framer"
+  | "commented_framer"
   | "checker";
 
 export interface PipelineState {
@@ -12,14 +14,18 @@ export interface PipelineState {
   targetLanguage: string;
   communityContext: string;
   passageReference: string;
-  // Agent outputs — editable by user
+  // Shared agents
   semanticInventory: string;
   oralBlueprint: string;
-  reconstruction: string;
-  framedReconstruction: string;
+  // Track A — Oral Scripture (faithful)
+  faithfulReconstruction: string;
+  faithfulFramed: string;
   fidelityReport: string;
-  // Final approved text for TTS
-  finalText: string;
+  faithfulFinalText: string;
+  // Track B — Commented Scripture
+  commentedReconstruction: string;
+  commentedFramed: string;
+  commentedFinalText: string;
 }
 
 export interface AgentConfig {
@@ -28,8 +34,7 @@ export interface AgentConfig {
   subtitle: string;
   icon: string;
   description: string;
-  // Which prior output(s) this agent consumes
-  inputs: (keyof PipelineState)[];
+  track: "shared" | "faithful" | "commented";
   outputKey: keyof PipelineState;
 }
 
@@ -39,9 +44,9 @@ export const AGENT_CONFIGS: AgentConfig[] = [
     title: "Semantic Cartographer",
     subtitle: "Mapping the meaning space",
     icon: "◈",
+    track: "shared",
     description:
-      "Reads the Prose Meaning Map and produces a complete semantic inventory in the target language — every participant, place, object, event, and speech act expressed in natural target-language terms. This breaks the English syntactic frame before reconstruction begins.",
-    inputs: ["mapContent", "targetLanguage", "communityContext"],
+      "Reads the Prose Meaning Map and produces two sections: Section A (Level 3 propositions only — the renderable content) and Section B (Levels 1–2 — the performance world). This separation enforces faithfulness from the start.",
     outputKey: "semanticInventory",
   },
   {
@@ -49,48 +54,59 @@ export const AGENT_CONFIGS: AgentConfig[] = [
     title: "Oral Pattern Analyst",
     subtitle: "Reading the oral tradition",
     icon: "◉",
+    track: "shared",
     description:
-      "Identifies how skilled storytellers in this language community naturally tell this kind of story — the discourse connectors, participant-tracking conventions, speech-framing patterns, and climax-marking devices of authentic oral narrative in this language.",
-    inputs: ["semanticInventory", "targetLanguage", "communityContext"],
+      "Identifies authentic oral narrative conventions of the target language community — discourse connectors, participant-tracking patterns, speech-framing, climax-marking devices.",
     outputKey: "oralBlueprint",
   },
   {
-    id: "reconstructor",
-    title: "Oral Reconstructor",
-    subtitle: "Telling the story from meaning",
+    id: "faithful_reconstructor",
+    title: "Faithful Reconstructor",
+    subtitle: "Oral Scripture — consultant-approvable",
     icon: "◎",
+    track: "faithful",
     description:
-      "A master storyteller persona tells the passage in the target language as an elder would tell it — working from the semantic inventory and oral blueprint, never from any prior text. Forbidden from following proposition order or using church register.",
-    inputs: [
-      "semanticInventory",
-      "oralBlueprint",
-      "targetLanguage",
-      "communityContext",
-    ],
-    outputKey: "reconstruction",
+      "Tells the passage using ONLY Section A content (Level 3 propositions). Nothing from Levels 1 or 2 may enter the spoken text. The subtraction test applies to every sentence. This output is the translation.",
+    outputKey: "faithfulReconstruction",
   },
   {
-    id: "framer",
-    title: "Oral Framer",
-    subtitle: "Adding performance scaffolding",
-    icon: "◐",
+    id: "commented_reconstructor",
+    title: "Commented Reconstructor",
+    subtitle: "Commented Scripture — rich contextual telling",
+    icon: "◍",
+    track: "commented",
     description:
-      "Adds legitimate oral metadiscourse per the aural italics taxonomy: attentional markers, structural markers, and turn-taking markers. Each addition is tagged in brackets. Governed by the subtraction rule — if removal causes no confusion, the cue is removed.",
-    inputs: ["reconstruction", "targetLanguage", "communityContext"],
-    outputKey: "framedReconstruction",
+      "Tells the passage drawing freely from all three levels — the arc, the scene world, character depth, theological weight, and the text itself. This is a guided listening experience, not a translation. Rich, contextual, explanatory.",
+    outputKey: "commentedReconstruction",
+  },
+  {
+    id: "faithful_framer",
+    title: "Faithful Framer",
+    subtitle: "Performance scaffolding for Oral Scripture",
+    icon: "◐",
+    track: "faithful",
+    description:
+      "Adds legitimate oral metadiscourse to the faithful reconstruction — attentional markers, structural markers, turn-taking markers. Governed by the subtraction rule. No content is added.",
+    outputKey: "faithfulFramed",
+  },
+  {
+    id: "commented_framer",
+    title: "Commented Framer",
+    subtitle: "Performance scaffolding for Commented Scripture",
+    icon: "◑",
+    track: "commented",
+    description:
+      "Adds oral metadiscourse to the commented reconstruction. Because the commented version is richer, transitions and attention cues are especially important for listener orientation.",
+    outputKey: "commentedFramed",
   },
   {
     id: "checker",
     title: "Fidelity Checker",
-    subtitle: "Checking completeness and naturalness",
-    icon: "◑",
+    subtitle: "Checking the Oral Scripture track only",
+    icon: "◧",
+    track: "faithful",
     description:
-      "Checks that every semantic element from the inventory is present in the reconstruction. Flags any calquing from known translations, any non-idiomatic expressions, and any passages that sound written rather than oral.",
-    inputs: [
-      "semanticInventory",
-      "framedReconstruction",
-      "targetLanguage",
-    ],
+      "Checks the faithful reconstruction for completeness (every Level 3 element is present) and faithfulness (nothing beyond Level 3 was added). The commented track is not checked — it operates under different rules.",
     outputKey: "fidelityReport",
   },
 ];
@@ -110,7 +126,6 @@ export const SUPPORTED_LANGUAGES = [
   { code: "other", label: "Other (specify in context)" },
 ];
 
-// ElevenLabs voice options — user can also paste a custom voice ID
 export const ELEVENLABS_VOICES = [
   { id: "pNInz6obpgDQGcFmaJgB", label: "Adam — deep, authoritative" },
   { id: "AZnzlk1XvdvUeBnXmlld", label: "Domi — warm, natural" },
