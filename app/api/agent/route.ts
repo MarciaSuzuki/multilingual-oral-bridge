@@ -1,4 +1,6 @@
 // app/api/agent/route.ts
+export const runtime = "edge";
+
 import Anthropic from "@anthropic-ai/sdk";
 import {
   cartographerPrompt,
@@ -44,7 +46,6 @@ export async function POST(req: Request) {
 
     const { system, user } = getPromptForStep(step, input);
 
-    // Use larger token limits for the reconstructor and cartographer
     const maxTokens =
       step === "reconstructor" || step === "cartographer" ? 6000 : 4000;
 
