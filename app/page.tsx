@@ -115,6 +115,156 @@ function primarySt(color: string): React.CSSProperties {
   return { padding: "8px 16px", background: color, border: "none", borderRadius: 4, color: C.cream, fontFamily: "'Source Serif 4', serif", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" };
 }
 
+// ─── Markdown Renderer ────────────────────────────────────────
+// Converts markdown-style output to clean HTML — no asterisks visible.
+
+function MarkdownRenderer({ text, color }: { text: string; color: string }) {
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+  let key = 0;
+  let i = 0;
+
+  // Inline formatting: **bold**, *italic*, `code`
+  function renderInline(raw: string): React.ReactNode {
+    const parts: React.ReactNode[] = [];
+    const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+    let last = 0; let m: RegExpExecArray | null; let k = 0;
+    while ((m = re.exec(raw)) !== null) {
+      if (m.index > last) parts.push(<span key={k++}>{raw.slice(last, m.index)}</span>);
+      if (m[2]) parts.push(<strong key={k++} style={{ fontWeight: 700, color: C.cream }}>{m[2]}</strong>);
+      else if (m[3]) parts.push(<em key={k++} style={{ fontStyle: "italic", color: C.creamDim }}>{m[3]}</em>);
+      else if (m[4]) parts.push(<code key={k++} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.82em", background: `${C.raised}`, border: `1px solid ${C.borderMid}`, borderRadius: 3, padding: "1px 5px", color: color }}>{m[4]}</code>);
+      last = m.index + m[0].length;
+    }
+    if (last < raw.length) parts.push(<span key={k++}>{raw.slice(last)}</span>);
+    return parts.length === 1 && typeof parts[0] === "object" ? parts[0] : <>{parts}</>;
+  }
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Skip empty lines — add spacing via margin on blocks
+    if (trimmed === "") { i++; continue; }
+
+    // H2: ## Heading
+    if (trimmed.startsWith("## ")) {
+      elements.push(
+        <div key={key++} style={{ fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color, marginTop: 18, marginBottom: 6, paddingBottom: 4, borderBottom: `1px solid ${color}33` }}>
+          {trimmed.slice(3)}
+        </div>
+      );
+      i++; continue;
+    }
+
+    // H3: ### Heading
+    if (trimmed.startsWith("### ")) {
+      elements.push(
+        <div key={key++} style={{ fontSize: "0.82rem", fontWeight: 700, color: C.cream, marginTop: 12, marginBottom: 4 }}>
+          {renderInline(trimmed.slice(4))}
+        </div>
+      );
+      i++; continue;
+    }
+
+    // H4: #### Heading
+    if (trimmed.startsWith("#### ")) {
+      elements.push(
+        <div key={key++} style={{ fontSize: "0.8rem", fontWeight: 600, color: C.creamDim, marginTop: 8, marginBottom: 3 }}>
+          {renderInline(trimmed.slice(5))}
+        </div>
+      );
+      i++; continue;
+    }
+
+    // Horizontal rule
+    if (trimmed === "---" || trimmed === "═══════════════════════════════════════════════") {
+      elements.push(<div key={key++} style={{ borderTop: `1px solid ${C.borderMid}`, margin: "12px 0" }} />);
+      i++; continue;
+    }
+
+    // Unordered list item: - or *
+    if (/^[-*•] /.test(trimmed)) {
+      const items: React.ReactNode[] = [];
+      while (i < lines.length && /^[-*•] /.test(lines[i].trim())) {
+        items.push(
+          <li key={i} style={{ marginBottom: 3, lineHeight: 1.6, paddingLeft: 4 }}>
+            {renderInline(lines[i].trim().slice(2))}
+          </li>
+        );
+        i++;
+      }
+      elements.push(
+        <ul key={key++} style={{ margin: "6px 0 8px 16px", padding: 0, listStyleType: "disc", color: C.creamDim, fontSize: "0.875rem" }}>
+          {items}
+        </ul>
+      );
+      continue;
+    }
+
+    // Numbered list item: 1. 2. etc
+    if (/^\d+\. /.test(trimmed)) {
+      const items: React.ReactNode[] = [];
+      while (i < lines.length && /^\d+\. /.test(lines[i].trim())) {
+        items.push(
+          <li key={i} style={{ marginBottom: 3, lineHeight: 1.6, paddingLeft: 4 }}>
+            {renderInline(lines[i].trim().replace(/^\d+\. /, ""))}
+          </li>
+        );
+        i++;
+      }
+      elements.push(
+        <ol key={key++} style={{ margin: "6px 0 8px 18px", padding: 0, color: C.creamDim, fontSize: "0.875rem" }}>
+          {items}
+        </ol>
+      );
+      continue;
+    }
+
+    // Table row: | col | col |
+    if (trimmed.startsWith("|")) {
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        const cells = lines[i].trim().split("|").filter((_, idx, arr) => idx > 0 && idx < arr.length - 1).map(c => c.trim());
+        if (!cells.every(c => /^[-:]+$/.test(c))) rows.push(cells); // skip separator row
+        i++;
+      }
+      if (rows.length > 0) {
+        elements.push(
+          <table key={key++} style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", margin: "8px 0 10px" }}>
+            <tbody>
+              {rows.map((row, ri) => (
+                <tr key={ri} style={{ borderBottom: `1px solid ${C.borderSubtle}` }}>
+                  {row.map((cell, ci) => (
+                    <td key={ci} style={{ padding: "5px 10px", color: ri === 0 ? C.cream : C.creamDim, fontWeight: ri === 0 ? 600 : 400, verticalAlign: "top" }}>
+                      {renderInline(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      }
+      continue;
+    }
+
+    // Regular paragraph
+    elements.push(
+      <p key={key++} style={{ fontSize: "0.885rem", lineHeight: 1.72, color: C.creamDim, marginBottom: 6 }}>
+        {renderInline(trimmed)}
+      </p>
+    );
+    i++;
+  }
+
+  return (
+    <div style={{ padding: "12px 14px", background: "rgba(10,10,5,0.6)", border: `1px solid ${C.borderMid}`, borderRadius: 5, minHeight: 60 }}>
+      {elements}
+    </div>
+  );
+}
+
 // ─── Export ────────────────────────────────────────────────────
 
 function exportTXT(state: PipelineState, track: "faithful" | "commented") {
@@ -128,11 +278,136 @@ function exportTXT(state: PipelineState, track: "faithful" | "commented") {
   const a = document.createElement("a"); a.href = url; a.download = `oral-bridge-${track}-${slug(state.passageReference)}.txt`; a.click(); URL.revokeObjectURL(url);
 }
 
+function exportProcessHTML(state: PipelineState, tracks: Tracks) {
+  const lang = getLangLabel(state.targetLanguage);
+  const date = new Date().toLocaleString();
+  const passage = state.passageReference || "(unnamed)";
+
+  function section(title: string, content: string, color: string) {
+    if (!content.trim()) return "";
+    // Convert markdown to minimal HTML for the document
+    const html = content
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/^#### (.+)$/gm, "<h4>$1</h4>")
+      .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+      .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+      .replace(/^---+$/gm, "<hr>")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/`(.+?)`/g, "<code>$1</code>")
+      .replace(/^[-*] (.+)$/gm, "<li>$1</li>")
+      .replace(/(<li>.*<\/li>\n?)+/g, "<ul>$&</ul>")
+      .replace(/\n\n/g, "</p><p>")
+      .replace(/^(?!<[hul]|<hr)(.+)$/gm, "<p>$1</p>");
+    return `
+      <section>
+        <div class="section-header" style="border-left: 4px solid ${color}; padding-left: 12px; margin: 28px 0 14px;">
+          <h2 style="color: ${color}; font-size: 1rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin: 0;">${title}</h2>
+        </div>
+        <div class="section-content">${html}</div>
+      </section>`;
+  }
+
+  const faithfulFinal = stripFramingTags(state.faithfulFramed || state.faithfulReconstruction);
+  const commentedFinal = stripFramingTags(state.commentedFramed || state.commentedReconstruction);
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oral Bridge — Process Document — ${passage}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 15px; line-height: 1.7; color: #2a2a1a; background: #faf9f2; max-width: 820px; margin: 0 auto; padding: 48px 40px 80px; }
+  h1 { font-size: 2rem; font-weight: 700; color: #1a1a0c; margin-bottom: 8px; }
+  h2 { font-size: 1.1rem; font-weight: 700; color: #3f3e20; margin: 20px 0 8px; }
+  h3 { font-size: 1rem; font-weight: 700; color: #3f3e20; margin: 14px 0 6px; }
+  h4 { font-size: 0.9rem; font-weight: 600; color: #555; margin: 10px 0 4px; }
+  p { margin-bottom: 8px; color: #3a3a28; }
+  ul, ol { margin: 6px 0 10px 20px; color: #3a3a28; }
+  li { margin-bottom: 3px; }
+  code { font-family: 'Courier New', monospace; font-size: 0.85em; background: #eeede0; padding: 1px 5px; border-radius: 3px; }
+  hr { border: none; border-top: 1px solid #d8d6c4; margin: 14px 0; }
+  strong { font-weight: 700; color: #1a1a0c; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.88rem; }
+  td { padding: 6px 10px; border-bottom: 1px solid #dddbc8; vertical-align: top; }
+  .doc-header { border-bottom: 3px solid #be4a01; padding-bottom: 20px; margin-bottom: 32px; }
+  .meta { font-size: 0.82rem; color: #787560; margin-top: 6px; }
+  .meta span { display: inline-block; margin-right: 18px; }
+  .track-header { background: #f0ede0; border-radius: 6px; padding: 14px 18px; margin: 32px 0 16px; }
+  .track-header h2 { font-size: 1.1rem; margin: 0 0 3px; }
+  .final-output { background: #f8f7ee; border: 1px solid #d8d6c4; border-radius: 6px; padding: 18px 20px; margin: 12px 0 20px; font-size: 1rem; line-height: 1.85; }
+  .section-content { padding: 0 0 4px; }
+  .footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid #d8d6c4; font-size: 0.75rem; color: #aaa89a; text-align: center; }
+  @media print { body { padding: 20px; } }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <h1>Oral Bridge — Process Document</h1>
+  <div class="meta">
+    <span><strong>Passage:</strong> ${passage}</span>
+    <span><strong>Language:</strong> ${lang}</span>
+    <span><strong>Generated:</strong> ${date}</span>
+  </div>
+  <div class="meta" style="margin-top: 4px;">
+    <span><strong>Community:</strong> ${state.communityContext}</span>
+  </div>
+</div>
+
+${section("Oral Exegesis — Semantic Cartographer", state.semanticInventory, "#777d45")}
+${section("Oral Patterns — Analyst", state.oralBlueprint, "#777d45")}
+
+${tracks.faithful && state.faithfulReconstruction ? `
+<div class="track-header" style="border-left: 4px solid #be4a01;">
+  <h2 style="color: #be4a01;">Translation Track</h2>
+  <p style="font-size: 0.82rem; color: #787560; margin: 0;">Faithful · consultant-approvable</p>
+</div>
+${section("Oral Reconstruction", state.faithfulReconstruction, "#be4a01")}
+${section("Oral Frames", state.faithfulFramed, "#be4a01")}
+${section("Accuracy Check", state.fidelityReport, "#be4a01")}
+${faithfulFinal ? `<div class="track-header" style="border-left: 4px solid #be4a01; background: #fdf5ee;">
+  <h2 style="color: #be4a01; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase;">Final Translation Output</h2>
+</div>
+<div class="final-output">${faithfulFinal.replace(/\n/g, "<br>")}</div>` : ""}
+` : ""}
+
+${tracks.commented && state.commentedReconstruction ? `
+<div class="track-header" style="border-left: 4px solid #777d45;">
+  <h2 style="color: #777d45;">Commentary Track</h2>
+  <p style="font-size: 0.82rem; color: #787560; margin: 0;">Rich · contextual · explanatory</p>
+</div>
+${section("Oral Reconstruction", state.commentedReconstruction, "#777d45")}
+${section("Oral Frames", state.commentedFramed, "#777d45")}
+${commentedFinal ? `<div class="track-header" style="border-left: 4px solid #777d45; background: #f4f5ee;">
+  <h2 style="color: #777d45; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase;">Final Commentary Output</h2>
+</div>
+<div class="final-output">${commentedFinal.replace(/\n/g, "<br>")}</div>` : ""}
+` : ""}
+
+<div class="footer">
+  Oral Bridge · Tripod Method · OBT Lab · Shema Bible Translation · YWAM Kansas City
+</div>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `oral-bridge-process-${slug(state.passageReference)}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function exportJSON(state: PipelineState) {
   const blob = new Blob([JSON.stringify({ ...state, exportedAt: new Date().toISOString() }, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url; a.download = `oral-bridge-pipeline-${slug(state.passageReference)}.json`; a.click(); URL.revokeObjectURL(url);
 }
+
 
 // ─── Framing Preview ───────────────────────────────────────────
 
@@ -182,7 +457,7 @@ function AgentStep({ stepId, label, description, status, output, isStreaming, er
   const isFramer = stepId.includes("framer");
   const hasFraming = isFramer && output.length > 0 && /\[(ATTENTIONAL|STRUCTURAL|TURN):/.test(output);
   const isOral = !stepId.includes("cartographer") && !stepId.includes("analyst") && !stepId.includes("checker");
-  const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
+  const [viewMode, setViewMode] = useState<"read" | "edit" | "preview">("read");
   const rows = Math.min(Math.max(output.split("\n").length + 1, 6), 28);
   const dotColor = isDone ? color : isActive ? color : C.borderMid;
 
@@ -220,18 +495,28 @@ function AgentStep({ stepId, label, description, status, output, isStreaming, er
           {isStreaming && !output && <div className="streaming-cursor" style={{ fontSize: "0.78rem", color: C.textMuted, fontStyle: "italic", padding: "4px 0" }}>Thinking</div>}
           {output && (
             <>
-              {hasFraming && (
+              {/* View toggle — rendered is default, edit on demand */}
+              {!isStreaming && (
                 <div style={{ display: "flex", gap: 5, marginBottom: 8 }}>
-                  {(["edit", "preview"] as const).map(mode => (
-                    <button key={mode} onClick={() => setViewMode(mode)} style={{ padding: "2px 8px", fontSize: "0.63rem", letterSpacing: "0.05em", textTransform: "uppercase", border: `1px solid ${viewMode === mode ? color : C.borderMid}`, borderRadius: 3, background: viewMode === mode ? `${color}20` : "transparent", color: viewMode === mode ? color : C.textMuted, cursor: "pointer" }}>
-                      {mode === "edit" ? "Edit" : "Preview"}
+                  {(["read", "edit"] as const).map(mode => (
+                    <button key={mode} onClick={() => setViewMode(mode as "read" | "edit" | "preview")} style={{ padding: "2px 8px", fontSize: "0.63rem", letterSpacing: "0.05em", textTransform: "uppercase", border: `1px solid ${viewMode === mode ? color : C.borderMid}`, borderRadius: 3, background: viewMode === mode ? `${color}20` : "transparent", color: viewMode === mode ? color : C.textMuted, cursor: "pointer" }}>
+                      {mode === "read" ? "Read" : "Edit"}
                     </button>
                   ))}
+                  {hasFraming && (
+                    <button onClick={() => setViewMode("preview")} style={{ padding: "2px 8px", fontSize: "0.63rem", letterSpacing: "0.05em", textTransform: "uppercase", border: `1px solid ${viewMode === "preview" ? color : C.borderMid}`, borderRadius: 3, background: viewMode === "preview" ? `${color}20` : "transparent", color: viewMode === "preview" ? color : C.textMuted, cursor: "pointer" }}>
+                      Frames
+                    </button>
+                  )}
                 </div>
               )}
               {viewMode === "preview" && hasFraming
                 ? <FramedPreview text={output} />
-                : <textarea value={output} onChange={(e) => onEdit(e.target.value)} disabled={isStreaming} rows={rows} className={isStreaming ? "streaming-cursor" : ""} style={{ ...textareaSt, fontFamily: isOral ? "'Source Serif 4', serif" : "'JetBrains Mono', monospace", fontSize: isOral ? "0.9rem" : "0.74rem", opacity: isStreaming ? 0.65 : 1 }} />
+                : viewMode === "edit"
+                ? <textarea value={output} onChange={(e) => onEdit(e.target.value)} disabled={isStreaming} rows={rows} className={isStreaming ? "streaming-cursor" : ""} style={{ ...textareaSt, fontFamily: isOral ? "'Source Serif 4', serif" : "'JetBrains Mono', monospace", fontSize: isOral ? "0.9rem" : "0.74rem", opacity: isStreaming ? 0.65 : 1 }} />
+                : isStreaming
+                ? <div className="streaming-cursor" style={{ padding: "10px 14px", background: "rgba(10,10,5,0.5)", border: `1px solid ${C.borderMid}`, borderRadius: 5, fontSize: "0.78rem", color: C.textMuted, fontStyle: "italic", minHeight: 60 }}>Generating…</div>
+                : <MarkdownRenderer text={output} color={color} />
               }
               {error && <div style={{ marginTop: 7, padding: "7px 10px", background: "rgba(180,50,50,0.15)", border: "1px solid rgba(180,50,50,0.4)", borderRadius: 4, color: "#f08080", fontSize: "0.75rem" }}>{error}</div>}
               {!isStreaming && (
@@ -767,8 +1052,11 @@ export default function OralBridgePage() {
                 </div>
                 <div style={{ height: 1, flex: 1, background: `linear-gradient(to left, transparent, ${C.telha})` }} />
               </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-                <button onClick={() => exportJSON(pipelineState)} style={ghostSt}>↓ Export pipeline .json</button>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginBottom: 10, flexWrap: "wrap" }}>
+                <button onClick={() => exportProcessHTML(pipelineState, activeTracks)} style={{ ...ghostSt, display: "flex", alignItems: "center", gap: 6, borderColor: C.telha + "66", color: C.telhaPale }}>
+                  ↓ Download process document .html
+                </button>
+                <button onClick={() => exportJSON(pipelineState)} style={ghostSt}>↓ Pipeline .json</button>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: faithfulAudioReady && commentedAudioReady ? "1fr 1fr" : "1fr", gap: 14 }}>
                 {faithfulAudioReady && (
