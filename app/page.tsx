@@ -48,12 +48,37 @@ function ShemaIcon({ size = 36, color = C.cream }: { size?: number; color?: stri
 // ─── Utilities ────────────────────────────────────────────────
 
 function stripFramingTags(text: string): string {
+  // 1. Remove everything from ## FRAMING NOTES onward
   const notesIndex = text.indexOf("## FRAMING NOTES");
-  const cleaned = notesIndex !== -1 ? text.slice(0, notesIndex).trim() : text;
-  return cleaned.replace(
+  let cleaned = notesIndex !== -1 ? text.slice(0, notesIndex).trim() : text;
+
+  // 2. Remove the English intro line the framer sometimes prepends
+  //    e.g. "Here is the reconstruction with metadiscourse additions marked:"
+  cleaned = cleaned.replace(/^here is the reconstruction[\s\S]*?(?:\n|:)\s*/i, "");
+  cleaned = cleaned.replace(/^[\s\S]*?marked:\s*\n/i, "");
+
+  // 3. Resolve [ATTENTIONAL/STRUCTURAL/TURN: "content"] to just the spoken content
+  cleaned = cleaned.replace(
     /\[(ATTENTIONAL|STRUCTURAL|TURN): "([^"]*)"\]/g,
     (_m, _t, content: string) => content
   );
+
+  // 4. Remove stage/performance directions in *(...)* or (*...*) format
+  //    e.g. *(para o povo, firme)*, *(pausa)*, *(silêncio)*
+  cleaned = cleaned.replace(/\*\([^)]*\)\*/g, "");
+  cleaned = cleaned.replace(/\(\*[^*]*\*\)/g, "");
+
+  // 5. Remove lines that consist only of --- or ═══ (horizontal rules from the framer)
+  cleaned = cleaned.replace(/^[-─═]{2,}\s*$/gm, "");
+
+  // 6. Remove any remaining lines that are purely markdown/meta and not spoken text:
+  //    lines starting with # (headings the framer added), lines that are just whitespace
+  cleaned = cleaned.replace(/^#{1,4} .+$/gm, "");
+
+  // 7. Collapse more than two consecutive newlines into two
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
+
+  return cleaned.trim();
 }
 
 function getLangLabel(code: string): string {
