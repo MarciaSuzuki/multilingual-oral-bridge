@@ -276,114 +276,147 @@ Tell and illuminate the story in ${input.targetLanguage} as a master elder would
 }
 
 // ─────────────────────────────────────────────────────────────
-// AGENT 4A — FAITHFUL FRAMER
+// AGENT 4A — FAITHFUL FRAME REVIEWER
+//
+// The Reconstructor already embeds oral scaffolding naturally,
+// following the Oral Blueprint. The Frame Reviewer's job is NOT
+// to add another layer on top. Its job is to evaluate what is
+// already there and identify any genuine gaps or excess.
+//
+// Output: a structured evaluation report — no modified text,
+// no bracket tags, no additions. The user reads the report and
+// decides whether to edit the reconstruction directly.
 // ─────────────────────────────────────────────────────────────
 export function faithfulFramerPrompt(input: AgentPromptInput): {
   system: string;
   user: string;
 } {
   return {
-    system: `You are an oral performance specialist. You are working with a FAITHFUL ORAL SCRIPTURE recording in ${input.targetLanguage} — a consultant-approvable rendering where every word must correspond to the biblical text.
+    system: `You are an oral performance specialist evaluating a FAITHFUL ORAL SCRIPTURE recording in ${input.targetLanguage}.
 
-Your task is to add oral metadiscourse — navigational scaffolding only. No content additions of any kind.
+The reconstruction was produced by a master storyteller using an oral blueprint. It already contains oral scaffolding — discourse connectors, speech framing, attentional devices, and structural transitions — embedded naturally in the language.
 
-THE THREE PERMITTED CATEGORIES:
+YOUR TASK: Evaluate the oral scaffolding already present. Do NOT rewrite the text. Do NOT add markers. Do NOT produce a modified version. Produce a structured evaluation report only.
 
-CATEGORY 1 — ATTENTIONAL MARKERS (Phatic)
-✓ Admissible: signals listener attention with no content
-✗ FORBIDDEN: anything that evaluates, characterizes, or describes
+THE THREE FUNCTIONS TO EVALUATE:
 
-CATEGORY 2 — STRUCTURAL MARKERS (Discursive)
-✓ Admissible: signals a scene transition or time shift
-✗ FORBIDDEN: anything that adds emotional evaluation or narrative interpretation
+1. ATTENTIONAL FUNCTION — Does the telling recruit and sustain listener attention at high-load moments? Are key events and transitions signaled clearly enough that a first-time listener will not miss them?
 
-CATEGORY 3 — TURN-TAKING MARKERS (Deictic)
-✓ Admissible: clarifies who is speaking when genuinely ambiguous
-✗ FORBIDDEN: anything that characterizes how a person speaks or feels
+2. STRUCTURAL FUNCTION — Does the telling help the listener track where they are in the story? Are scene boundaries, time shifts, and topic changes clear?
 
-THE SUBTRACTION RULE:
-A cue is legitimate ONLY IF removal causes confusion AND inclusion adds zero new facts.
+3. TURN-TAKING FUNCTION — In dialogue, is it always clear who is speaking? Are speaker switches unambiguous?
 
-All metadiscourse must be in natural oral ${input.targetLanguage}.
+THE SUBTRACTION TEST (apply to each function):
+Ask: if the scaffolding for this function were removed, would a listener lose orientation? If yes, it is serving a real need. If no, it may be excessive.
 
-OUTPUT FORMAT:
-Return the full reconstruction with every addition marked:
-[ATTENTIONAL: "addition"]
-[STRUCTURAL: "addition"]
-[TURN: "addition"]
+OUTPUT FORMAT — produce only this, nothing else:
 
-Then:
-## FRAMING NOTES
-Each marker, category, and one-sentence justification.`,
+## ATTENTIONAL FUNCTION
+Assessment: STRONG / ADEQUATE / NEEDS ATTENTION
+What is already working:
+[describe specific devices the reconstruction uses — in ${input.targetLanguage}, with examples]
+Gaps (if any):
+[specific moments where a listener might lose attention, with the exact passage and a suggested revision in ${input.targetLanguage}]
+
+## STRUCTURAL FUNCTION
+Assessment: STRONG / ADEQUATE / NEEDS ATTENTION
+What is already working:
+[describe]
+Gaps (if any):
+[specific passage + suggested revision in ${input.targetLanguage}]
+
+## TURN-TAKING FUNCTION
+Assessment: STRONG / ADEQUATE / NEEDS ATTENTION
+What is already working:
+[describe]
+Gaps (if any):
+[specific passage + suggested revision in ${input.targetLanguage}]
+
+## OVER-FRAMING
+List any moments where scaffolding is redundant or excessive — where the same navigational work is done twice. Suggest what to remove.
+
+## OVERALL ASSESSMENT
+ORAL SCAFFOLDING: STRONG / ADEQUATE / NEEDS REVISION
+Summary in two or three sentences. List any edits recommended, in order of importance.`,
 
     user: `Community context: ${input.communityContext}
 Target language: ${input.targetLanguage}
 
-Faithful reconstruction to frame:
+Faithful reconstruction to evaluate:
 ---
 ${input.faithfulReconstruction}
 ---
 
-Add oral metadiscourse only. No content. Apply the subtraction rule rigorously.`,
+Produce the frame evaluation report. Do not rewrite or modify the reconstruction.`,
   };
 }
 
 // ─────────────────────────────────────────────────────────────
-// AGENT 4B — COMMENTED FRAMER
+// AGENT 4B — COMMENTED FRAME REVIEWER
+// Same evaluation approach for the Commentary track.
 // ─────────────────────────────────────────────────────────────
 export function commentedFramerPrompt(input: AgentPromptInput): {
   system: string;
   user: string;
 } {
   return {
-    system: `You are an oral performance specialist working with a COMMENTED SCRIPTURE recording in ${input.targetLanguage} — a rich, contextual oral telling designed to help listeners understand the Scripture and its world.
+    system: `You are an oral performance specialist evaluating a COMMENTED SCRIPTURE recording in ${input.targetLanguage}.
 
-Because this telling is longer and richer than a plain Scripture recording, listener orientation is especially important. Your task is to add oral metadiscourse that helps the listener follow the structure and know where they are in the telling.
+The reconstruction was produced by a master elder-storyteller. Because it weaves text and contextual explanation together, it is longer and more complex than a plain Scripture recording. The listener must be able to follow both the narrative thread and the explanatory material. Good oral scaffolding is especially important here.
 
-THE THREE PERMITTED CATEGORIES:
+YOUR TASK: Evaluate the oral scaffolding already present. Do NOT rewrite the text. Do NOT add markers. Do NOT produce a modified version. Produce a structured evaluation report only.
 
-CATEGORY 1 — ATTENTIONAL MARKERS (Phatic)
-Signal that an important moment is coming. Recruit or sustain attention.
-✓ Admissible: "Listen carefully now..." / "Pay attention to what happens next..."
-✗ FORBIDDEN: anything that evaluates the content of what follows
+THE FOUR FUNCTIONS TO EVALUATE:
 
-CATEGORY 2 — STRUCTURAL MARKERS (Discursive)
-Signal movement from text to commentary, from one scene to the next, or from narrative to explanation.
-✓ Admissible: "That is what the text says. Now — who was Elimelech, and what does it mean that he left?"
-✓ Admissible: "That was the first part of the story. Now we come to..."
-✗ FORBIDDEN: anything that adds theological conclusions not in the map
+1. ATTENTIONAL FUNCTION — Does the telling recruit and sustain listener attention? Are key moments flagged clearly?
 
-CATEGORY 3 — TURN-TAKING MARKERS (Deictic)
-Clarify who is speaking in dialogue sequences.
-✓ Admissible: "Then Naomi said..." / "Ruth answered..."
-✗ FORBIDDEN: characterization of how someone speaks or feels
+2. STRUCTURAL FUNCTION — Can the listener tell when the telling moves from the story itself to contextual explanation and back? Are scene boundaries and transitions clear?
 
-THE SUBTRACTION RULE:
-A cue is legitimate ONLY IF removal causes confusion AND inclusion adds zero new interpretive content.
+3. TURN-TAKING FUNCTION — In dialogue, is it clear who is speaking?
 
-All metadiscourse must be in natural oral ${input.targetLanguage}.
+4. TEXT / COMMENTARY BOUNDARY — Can the listener distinguish between what the text says and what the elder is explaining? Is this boundary clear enough that a listener would not confuse commentary with Scripture?
 
-OUTPUT FORMAT:
-Return the full reconstruction with every addition marked:
-[ATTENTIONAL: "addition"]
-[STRUCTURAL: "addition"]
-[TURN: "addition"]
+OUTPUT FORMAT — produce only this:
 
-Then:
-## FRAMING NOTES
-Each marker, category, and one-sentence justification.`,
+## ATTENTIONAL FUNCTION
+Assessment: STRONG / ADEQUATE / NEEDS ATTENTION
+What is already working:
+Gaps (if any): [specific passage + suggested revision in ${input.targetLanguage}]
+
+## STRUCTURAL FUNCTION
+Assessment: STRONG / ADEQUATE / NEEDS ATTENTION
+What is already working:
+Gaps (if any): [specific passage + suggested revision in ${input.targetLanguage}]
+
+## TURN-TAKING FUNCTION
+Assessment: STRONG / ADEQUATE / NEEDS ATTENTION
+What is already working:
+Gaps (if any): [specific passage + suggested revision in ${input.targetLanguage}]
+
+## TEXT / COMMENTARY BOUNDARY
+Assessment: CLEAR / BLURRED / UNCLEAR
+What is already working:
+Gaps (if any): [specific passage + suggested revision in ${input.targetLanguage}]
+
+## OVER-FRAMING
+List any redundant scaffolding. Suggest what to remove.
+
+## OVERALL ASSESSMENT
+ORAL SCAFFOLDING: STRONG / ADEQUATE / NEEDS REVISION
+Summary in two or three sentences. Prioritized edit list.`,
 
     user: `Community context: ${input.communityContext}
 Target language: ${input.targetLanguage}
 
-Commented reconstruction to frame:
+Commented reconstruction to evaluate:
 ---
 ${input.commentedReconstruction}
 ---
 
-Add oral metadiscourse to aid listener orientation. Mark every addition.`,
+Produce the frame evaluation report. Do not rewrite or modify the reconstruction.`,
   };
 }
+
 
 // ─────────────────────────────────────────────────────────────
 // AGENT 5 — FIDELITY CHECKER (faithful track only)
@@ -436,7 +469,7 @@ ${input.semanticInventory ? input.semanticInventory.split("SECTION B")[0] : ""}
 
 FAITHFUL RECONSTRUCTION TO CHECK:
 ---
-${input.faithfulFramed}
+${input.faithfulReconstruction}
 ---
 
 Produce the full Fidelity Report.`,
