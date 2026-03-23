@@ -344,7 +344,7 @@ function exportProcessHTML(state: PipelineState, tracks: Tracks) {
 <title>Oral Bridge — Process Document — ${passage}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Georgia', serif; font-size: 15px; line-height: 1.7; color: #2a2a1a; background: #faf9f2; max-width: 820px; margin: 0 auto; padding: 48px 40px 80px; }
+  body { font-family: 'Georgia', serif; font-size: 15px; line-height: 1.7; color: #2a2a1a; background: #faf9f2; max-width: 760px; margin: 0 auto; padding: 40px 32px 80px; }
   h1 { font-size: 2rem; font-weight: 700; color: #1a1a0c; margin-bottom: 8px; }
   h2 { font-size: 1.1rem; font-weight: 700; color: #3f3e20; margin: 20px 0 8px; }
   h3 { font-size: 1rem; font-weight: 700; color: #3f3e20; margin: 14px 0 6px; }
@@ -582,7 +582,7 @@ function TrackSection({ title, subtitle, color, icon, badge, children, defaultOp
         <span style={{ color, fontSize: "1.1rem", flexShrink: 0 }}>{icon}</span>
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "0.95rem", fontWeight: 700, color: C.cream }}>{title}</div>
-          <div style={{ fontSize: "0.62rem", color, marginTop: 1, letterSpacing: "0.05em" }}>{subtitle}</div>
+          {subtitle && <div style={{ fontSize: "0.62rem", color, marginTop: 1, letterSpacing: "0.05em" }}>{subtitle}</div>}
         </div>
         {badge && <span style={{ fontSize: "0.57rem", letterSpacing: "0.09em", textTransform: "uppercase", color, background: `${color}1a`, border: `1px solid ${color}44`, borderRadius: 3, padding: "2px 7px" }}>{badge}</span>}
         <span style={{ color: C.textMuted, fontSize: "0.65rem" }}>{open ? "▾" : "▸"}</span>
@@ -714,7 +714,7 @@ function UploadPanel({ onStart }: {
   const wordCount = mapText.split(/\s+/).filter(Boolean).length;
 
   return (
-    <div style={{ maxWidth: 600, margin: "0 auto", padding: "52px 24px 80px" }}>
+    <div style={{ maxWidth: 520, margin: "0 auto", padding: "44px 20px 80px" }}>
       {/* Hero */}
       <div style={{ textAlign: "center", marginBottom: 44 }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
@@ -723,9 +723,6 @@ function UploadPanel({ onStart }: {
         <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(2.4rem, 5vw, 3.6rem)", fontWeight: 700, color: C.cream, lineHeight: 1.1, marginBottom: 14, letterSpacing: "-0.02em" }}>
           Oral Bridge
         </h1>
-        <p style={{ color: C.creamDim, fontSize: "clamp(0.9rem, 2vw, 1.1rem)", lineHeight: 1.65, maxWidth: 480, margin: "0 auto 18px", letterSpacing: "0.01em" }}>
-          Generating Oral Scriptures and Biblical Commentaries for Bridge Languages
-        </p>
         <div style={{ display: "inline-flex", gap: 10, fontSize: "0.6rem", letterSpacing: "0.12em", textTransform: "uppercase", color: C.textMuted }}>
           <span>OBT Lab</span><span style={{ color: C.telha }}>·</span>
           <span>Shema Bible Translation</span><span style={{ color: C.telha }}>·</span>
@@ -774,8 +771,8 @@ function UploadPanel({ onStart }: {
         <label style={labelSt}>Output tracks</label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {([
-            { key: "faithful" as const, label: "Translation", sub: "Faithful · consultant-approvable", color: TRANSLATION_COLOR },
-            { key: "commented" as const, label: "Commentary", sub: "Rich · contextual · explanatory", color: COMMENTARY_COLOR },
+            { key: "faithful" as const, label: "Translation", sub: "", color: TRANSLATION_COLOR },
+            { key: "commented" as const, label: "Commentary", sub: "", color: COMMENTARY_COLOR },
           ]).map(t => (
             <div key={t.key} onClick={() => setTracks(prev => ({ ...prev, [t.key]: !prev[t.key] }))}
               style={{ padding: "12px 14px", border: `1.5px solid ${tracks[t.key] ? t.color : C.borderMid}`, borderRadius: 7, cursor: "pointer", background: tracks[t.key] ? `${t.color}10` : C.surface, transition: "all 0.2s ease" }}>
@@ -1004,9 +1001,6 @@ export default function OralBridgePage() {
           <ShemaIcon size={28} color={C.telha} />
           <div>
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "0.95rem", fontWeight: 700, color: C.cream, lineHeight: 1.1 }}>Oral Bridge</div>
-            <div style={{ fontSize: "0.52rem", letterSpacing: "0.1em", textTransform: "uppercase", color: C.textMuted }}>
-              Generating Oral Scriptures and Biblical Commentaries for Bridge Languages
-            </div>
           </div>
         </div>
         {phase === "pipeline" && (
@@ -1022,10 +1016,10 @@ export default function OralBridgePage() {
       {phase === "upload" && <UploadPanel onStart={handleStart} />}
 
       {phase === "pipeline" && (
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 18px 80px" }}>
+        <div style={{ maxWidth: 860, margin: "0 auto", padding: "20px 16px 80px" }}>
 
           {/* Shared Analysis */}
-          <TrackSection title="Shared Analysis" subtitle="Oral Exegesis · Oral Patterns" color={SHARED_COLOR} icon="◈"
+          <TrackSection title="Shared Analysis" subtitle="" color={SHARED_COLOR} icon="◈"
             badge={stepStatuses.analyst === "done" ? "complete" : "in progress"}
             defaultOpen={stepStatuses.analyst !== "done"}>
             <AgentStep stepId="cartographer" label={STEP_FULL_LABELS.cartographer} description={descriptions.cartographer}
@@ -1043,7 +1037,7 @@ export default function OralBridgePage() {
           {/* Two-column tracks */}
           <div id="track-section" style={{ display: "grid", gridTemplateColumns: activeTracks.faithful && activeTracks.commented ? "1fr 1fr" : "1fr", gap: 14, marginTop: 10 }}>
             {activeTracks.faithful && (
-              <TrackSection title="Translation" subtitle="Faithful · consultant-approvable" color={TRANSLATION_COLOR} icon="◎"
+              <TrackSection title="Translation" subtitle="" color={TRANSLATION_COLOR} icon="◎"
                 badge={stepStatuses.checker === "done" ? "complete" : stepStatuses.faithful_reconstructor === "pending" ? "waiting" : "in progress"}>
                 <div id="step-faithful_reconstructor">
                 <AgentStep stepId="faithful_reconstructor" label={STEP_FULL_LABELS.faithful_reconstructor} description={descriptions.faithful_reconstructor}
@@ -1070,7 +1064,7 @@ export default function OralBridgePage() {
             )}
 
             {activeTracks.commented && (
-              <TrackSection title="Commentary" subtitle="Rich · contextual · explanatory" color={COMMENTARY_COLOR} icon="◍"
+              <TrackSection title="Commentary" subtitle="" color={COMMENTARY_COLOR} icon="◍"
                 badge={stepStatuses.commented_framer === "done" ? "complete" : stepStatuses.commented_reconstructor === "pending" ? "waiting" : "in progress"}>
                 <div id="step-commented_reconstructor">
                 <AgentStep stepId="commented_reconstructor" label={STEP_FULL_LABELS.commented_reconstructor} description={descriptions.commented_reconstructor}
