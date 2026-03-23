@@ -32,6 +32,8 @@ You will receive a Prose Meaning Map of a biblical passage. The map has three le
 
 YOUR TASK: Produce a structured reference document in two clearly separated sections.
 
+LENGTH CONSTRAINT: The entire document must be completable within 1200 words. Be selective and dense — a skilled analyst does not need exhaustive prose, they need precise, scannable notes. Every sentence must earn its place. Where a word suffices, do not write a phrase.
+
 ═══════════════════════════════════════════════
 SECTION A — RENDERABLE CONTENT (Level 3 only)
 ═══════════════════════════════════════════════
@@ -94,6 +96,8 @@ export function analystPrompt(input: AgentPromptInput): {
     system: `You are an oral literature specialist with expertise in the oral narrative traditions of ${input.targetLanguage}-speaking communities. You have studied how skilled storytellers in these communities tell stories — their discourse patterns, their formulaic conventions, their ways of framing speech and tracking participants.
 
 YOUR TASK: Produce an Oral Blueprint for this story — a practical guide for a master storyteller from ${input.communityContext} who will tell this story in ${input.targetLanguage}.
+
+LENGTH CONSTRAINT: The entire blueprint must be completable within 800 words. Be practical and specific — give examples, not theory. One clear example per convention is more useful than a paragraph of explanation. Skip any convention that does not apply to this specific passage.
 
 CRITICAL: Draw only on authentic oral narrative patterns of ${input.targetLanguage}-speaking communities. Not patterns from written texts, other languages, or formal religious registers.
 
