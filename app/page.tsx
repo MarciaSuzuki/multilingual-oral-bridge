@@ -110,8 +110,8 @@ const STEP_FULL_LABELS: Record<AgentStep, string> = {
   analyst: "Oral Patterns",
   faithful_reconstructor: "Oral Reconstruction",
   commented_reconstructor: "Oral Reconstruction",
-  faithful_framer: "Oral Frames",
-  commented_framer: "Oral Frames",
+  faithful_framer: "Frame Review",
+  commented_framer: "Frame Review",
   checker: "Accuracy Check",
 };
 
@@ -294,8 +294,8 @@ function MarkdownRenderer({ text, color }: { text: string; color: string }) {
 
 function exportTXT(state: PipelineState, track: "faithful" | "commented") {
   const text = track === "faithful"
-    ? stripFramingTags(state.faithfulFramed || state.faithfulReconstruction)
-    : stripFramingTags(state.commentedFramed || state.commentedReconstruction);
+    ? stripFramingTags(state.faithfulReconstruction)
+    : stripFramingTags(state.commentedReconstruction);
   const label = track === "faithful" ? "Translation" : "Commentary";
   const header = [`Oral Bridge — ${label}`, `Passage: ${state.passageReference || "(unnamed)"}`, `Language: ${getLangLabel(state.targetLanguage)}`, `Community: ${state.communityContext}`, `Exported: ${new Date().toLocaleString()}`, "─────────────────────────────────", ""].join("\n");
   const blob = new Blob([header + text], { type: "text/plain;charset=utf-8" });
@@ -333,8 +333,8 @@ function exportProcessHTML(state: PipelineState, tracks: Tracks) {
       </section>`;
   }
 
-  const faithfulFinal = stripFramingTags(state.faithfulFramed || state.faithfulReconstruction);
-  const commentedFinal = stripFramingTags(state.commentedFramed || state.commentedReconstruction);
+  const faithfulFinal = stripFramingTags(state.faithfulReconstruction);
+  const commentedFinal = stripFramingTags(state.commentedReconstruction);
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -391,7 +391,7 @@ ${tracks.faithful && state.faithfulReconstruction ? `
   <p style="font-size: 0.82rem; color: #787560; margin: 0;">Faithful · consultant-approvable</p>
 </div>
 ${section("Oral Reconstruction", state.faithfulReconstruction, "#be4a01")}
-${section("Oral Frames", state.faithfulFramed, "#be4a01")}
+${section("Frame Review", state.faithfulFramed, "#be4a01")}
 ${section("Accuracy Check", state.fidelityReport, "#be4a01")}
 ${faithfulFinal ? `<div class="track-header" style="border-left: 4px solid #be4a01; background: #fdf5ee;">
   <h2 style="color: #be4a01; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase;">Final Translation Output</h2>
@@ -405,7 +405,7 @@ ${tracks.commented && state.commentedReconstruction ? `
   <p style="font-size: 0.82rem; color: #787560; margin: 0;">Rich · contextual · explanatory</p>
 </div>
 ${section("Oral Reconstruction", state.commentedReconstruction, "#777d45")}
-${section("Oral Frames", state.commentedFramed, "#777d45")}
+${section("Frame Review", state.commentedFramed, "#777d45")}
 ${commentedFinal ? `<div class="track-header" style="border-left: 4px solid #777d45; background: #f4f5ee;">
   <h2 style="color: #777d45; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase;">Final Commentary Output</h2>
 </div>
@@ -479,8 +479,8 @@ function AgentStep({ stepId, label, description, status, output, isStreaming, er
   const isDone = status === "done";
   const isActive = status === "active" || status === "running";
   const isPending = status === "pending";
-  const isFramer = stepId.includes("framer");
-  const hasFraming = isFramer && output.length > 0 && /\[(ATTENTIONAL|STRUCTURAL|TURN):/.test(output);
+  const isFramer = false; // Frame reviewer produces a report — no framing tag preview needed
+  const hasFraming = isFramer;
   const isOral = !stepId.includes("cartographer") && !stepId.includes("analyst") && !stepId.includes("checker");
   const [viewMode, setViewMode] = useState<"read" | "edit" | "preview">("read");
   const rows = Math.min(Math.max(output.split("\n").length + 1, 6), 28);
@@ -912,7 +912,7 @@ export default function OralBridgePage() {
 
       case "checker": {
         const st = stateRef.current;
-        setPipelineState(p => ({ ...p, faithfulFinalText: stripFramingTags(st.faithfulFramed || st.faithfulReconstruction) }));
+        setPipelineState(p => ({ ...p, faithfulFinalText: stripFramingTags(st.faithfulReconstruction) }));
         setFaithfulAudioReady(true);
         setOpenStepId("");
         // Offer other track if not already active
@@ -928,7 +928,7 @@ export default function OralBridgePage() {
 
       case "commented_framer": {
         const st = stateRef.current;
-        setPipelineState(p => ({ ...p, commentedFinalText: stripFramingTags(st.commentedFramed || st.commentedReconstruction) }));
+        setPipelineState(p => ({ ...p, commentedFinalText: stripFramingTags(st.commentedReconstruction) }));
         setCommentedAudioReady(true);
         setOpenStepId("");
         // Offer other track if not already active
@@ -971,8 +971,8 @@ export default function OralBridgePage() {
     analyst: "Identifies authentic oral narrative conventions of the target community — discourse connectors, participant tracking, speech framing, climax marking.",
     faithful_reconstructor: "Tells the passage using ONLY Section A content. The subtraction test applies to every sentence. This is the Translation.",
     commented_reconstructor: "Tells and illuminates the passage as a master elder would — weaving text and world together, drawing freely from both sections. This is the Commentary.",
-    faithful_framer: "Adds oral metadiscourse (attentional, structural, turn-taking markers) to the Translation. Governed by the subtraction rule — no content is added.",
-    commented_framer: "Adds oral metadiscourse to the Commentary to help listeners follow the richer, contextual telling.",
+    faithful_framer: "Evaluates the oral scaffolding already present in the reconstruction — attentional devices, structural transitions, turn-taking clarity. Identifies any gaps or redundancies. No text is added; the report guides direct editing of the reconstruction if needed.",
+    commented_framer: "Evaluates the oral scaffolding in the commentary reconstruction, including the clarity of the boundary between Scripture and contextual explanation. Produces an evaluation report.",
     checker: "Checks the Translation for completeness (all Level 3 elements present) and faithfulness (nothing beyond Level 3 added).",
   };
 
@@ -1086,13 +1086,13 @@ export default function OralBridgePage() {
               <div style={{ display: "grid", gridTemplateColumns: faithfulAudioReady && commentedAudioReady ? "1fr 1fr" : "1fr", gap: 14 }}>
                 {faithfulAudioReady && (
                   <AudioPanel title="Translation" color={TRANSLATION_COLOR} trackId="faithful"
-                    text={pipelineState.faithfulFinalText || stripFramingTags(pipelineState.faithfulFramed || pipelineState.faithfulReconstruction)}
+                    text={pipelineState.faithfulFinalText || stripFramingTags(pipelineState.faithfulReconstruction)}
                     passageRef={pipelineState.passageReference} langCode={pipelineState.targetLanguage}
                     onExportTXT={() => exportTXT(pipelineState, "faithful")} />
                 )}
                 {commentedAudioReady && (
                   <AudioPanel title="Commentary" color={COMMENTARY_COLOR} trackId="commented"
-                    text={pipelineState.commentedFinalText || stripFramingTags(pipelineState.commentedFramed || pipelineState.commentedReconstruction)}
+                    text={pipelineState.commentedFinalText || stripFramingTags(pipelineState.commentedReconstruction)}
                     passageRef={pipelineState.passageReference} langCode={pipelineState.targetLanguage}
                     onExportTXT={() => exportTXT(pipelineState, "commented")} />
                 )}
