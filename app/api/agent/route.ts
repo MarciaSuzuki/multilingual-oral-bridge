@@ -48,10 +48,10 @@ export async function POST(req: Request) {
     const { system, user } = getPromptForStep(step, input);
 
     const maxTokens =
-      step === "faithful_reconstructor" ||
-      step === "commented_reconstructor" ||
-      step === "cartographer"
+      step === "faithful_reconstructor" || step === "commented_reconstructor"
         ? 3000
+        : step === "cartographer" || step === "analyst"
+        ? 1500
         : 2000;
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
