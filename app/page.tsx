@@ -469,11 +469,12 @@ function FramedPreview({ text }: { text: string }) {
 // Accordion: openId controls which step is open.
 // When this step's id matches openId it is open; clicking sets openId.
 
-function AgentStep({ stepId, label, description, status, output, isStreaming, error, color, openId, setOpenId, onRun, onEdit, onApprove }: {
+function AgentStep({ stepId, label, description, status, output, isStreaming, error, color, openId, setOpenId, onRun, onEdit, onApprove, onReviseTarget, revisionTargetLabel }: {
   stepId: string; label: string; description: string;
   status: StepStatus; output: string; isStreaming: boolean; error: string; color: string;
   openId: string; setOpenId: (id: string) => void;
   onRun: () => void; onEdit: (v: string) => void; onApprove: () => void;
+  onReviseTarget?: () => void; revisionTargetLabel?: string;
 }) {
   const isOpen = openId === stepId;
   const isDone = status === "done";
@@ -545,10 +546,19 @@ function AgentStep({ stepId, label, description, status, output, isStreaming, er
               }
               {error && <div style={{ marginTop: 7, padding: "7px 10px", background: "rgba(180,50,50,0.15)", border: "1px solid rgba(180,50,50,0.4)", borderRadius: 4, color: "#f08080", fontSize: "0.75rem" }}>{error}</div>}
               {!isStreaming && (
-                <div style={{ display: "flex", gap: 6, marginTop: 9, justifyContent: "flex-end" }}>
-                  <button onClick={onRun} style={ghostSt}>↻ Redo</button>
-                  {!isDone && <button onClick={onApprove} style={primarySt(color)}>Approve →</button>}
-                  {isDone && <span style={{ fontSize: "0.67rem", color, alignSelf: "center" }}>✓ Approved</span>}
+                <div style={{ display: "flex", gap: 6, marginTop: 9, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
+                  <div>
+                    {onReviseTarget && output && (
+                      <button onClick={onReviseTarget} style={{ ...ghostSt, borderColor: color + "88", color: color }}>
+                        ← Revise {revisionTargetLabel || "Reconstruction"}
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={onRun} style={ghostSt}>↻ Redo</button>
+                    {!isDone && <button onClick={onApprove} style={primarySt(color)}>Approve →</button>}
+                    {isDone && <span style={{ fontSize: "0.67rem", color, alignSelf: "center" }}>✓ Approved</span>}
+                  </div>
                 </div>
               )}
             </>
@@ -966,6 +976,14 @@ export default function OralBridgePage() {
     setPipelineState(prev => ({ ...prev, [outputKeyForStep(step)]: value }));
   }, []);
 
+  // When Frame Review or Accuracy Check suggests revisions, open the reconstruction
+  // for editing and reset the current step so it can be re-run after edits.
+  const reviseReconstruction = useCallback((currentStep: AgentStep, reconstructionStep: AgentStep) => {
+    setOpenStepId(reconstructionStep);
+    setStepStatuses(prev => ({ ...prev, [currentStep]: "active" }));
+    document.getElementById(`step-${reconstructionStep}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
   const descriptions: Record<AgentStep, string> = {
     cartographer: "Reads the Prose Meaning Map and produces two sections: Section A (Level 3 propositions — the only content that may be spoken) and Section B (Levels 1–2 — performance world that shapes register without contributing spoken content).",
     analyst: "Identifies authentic oral narrative conventions of the target community — discourse connectors, participant tracking, speech framing, climax marking.",
@@ -1027,37 +1045,47 @@ export default function OralBridgePage() {
             {activeTracks.faithful && (
               <TrackSection title="Translation" subtitle="Faithful · consultant-approvable" color={TRANSLATION_COLOR} icon="◎"
                 badge={stepStatuses.checker === "done" ? "complete" : stepStatuses.faithful_reconstructor === "pending" ? "waiting" : "in progress"}>
+                <div id="step-faithful_reconstructor">
                 <AgentStep stepId="faithful_reconstructor" label={STEP_FULL_LABELS.faithful_reconstructor} description={descriptions.faithful_reconstructor}
                   status={stepStatuses.faithful_reconstructor} output={pipelineState.faithfulReconstruction}
                   isStreaming={streamingStep === "faithful_reconstructor"} error={stepErrors.faithful_reconstructor} color={TRANSLATION_COLOR}
                   openId={openStepId} setOpenId={setOpenStepId}
                   onRun={() => runStep("faithful_reconstructor")} onEdit={v => editOutput("faithful_reconstructor", v)} onApprove={() => approveStep("faithful_reconstructor")} />
+                </div>
                 <AgentStep stepId="faithful_framer" label={STEP_FULL_LABELS.faithful_framer} description={descriptions.faithful_framer}
                   status={stepStatuses.faithful_framer} output={pipelineState.faithfulFramed}
                   isStreaming={streamingStep === "faithful_framer"} error={stepErrors.faithful_framer} color={TRANSLATION_COLOR}
                   openId={openStepId} setOpenId={setOpenStepId}
-                  onRun={() => runStep("faithful_framer")} onEdit={v => editOutput("faithful_framer", v)} onApprove={() => approveStep("faithful_framer")} />
+                  onRun={() => runStep("faithful_framer")} onEdit={v => editOutput("faithful_framer", v)} onApprove={() => approveStep("faithful_framer")}
+                  onReviseTarget={() => reviseReconstruction("faithful_framer", "faithful_reconstructor")}
+                  revisionTargetLabel="Oral Reconstruction" />
                 <AgentStep stepId="checker" label={STEP_FULL_LABELS.checker} description={descriptions.checker}
                   status={stepStatuses.checker} output={pipelineState.fidelityReport}
                   isStreaming={streamingStep === "checker"} error={stepErrors.checker} color={TRANSLATION_COLOR}
                   openId={openStepId} setOpenId={setOpenStepId}
-                  onRun={() => runStep("checker")} onEdit={v => editOutput("checker", v)} onApprove={() => approveStep("checker")} />
+                  onRun={() => runStep("checker")} onEdit={v => editOutput("checker", v)} onApprove={() => approveStep("checker")}
+                  onReviseTarget={() => reviseReconstruction("checker", "faithful_reconstructor")}
+                  revisionTargetLabel="Oral Reconstruction" />
               </TrackSection>
             )}
 
             {activeTracks.commented && (
               <TrackSection title="Commentary" subtitle="Rich · contextual · explanatory" color={COMMENTARY_COLOR} icon="◍"
                 badge={stepStatuses.commented_framer === "done" ? "complete" : stepStatuses.commented_reconstructor === "pending" ? "waiting" : "in progress"}>
+                <div id="step-commented_reconstructor">
                 <AgentStep stepId="commented_reconstructor" label={STEP_FULL_LABELS.commented_reconstructor} description={descriptions.commented_reconstructor}
                   status={stepStatuses.commented_reconstructor} output={pipelineState.commentedReconstruction}
                   isStreaming={streamingStep === "commented_reconstructor"} error={stepErrors.commented_reconstructor} color={COMMENTARY_COLOR}
                   openId={openStepId} setOpenId={setOpenStepId}
                   onRun={() => runStep("commented_reconstructor")} onEdit={v => editOutput("commented_reconstructor", v)} onApprove={() => approveStep("commented_reconstructor")} />
+                </div>
                 <AgentStep stepId="commented_framer" label={STEP_FULL_LABELS.commented_framer} description={descriptions.commented_framer}
                   status={stepStatuses.commented_framer} output={pipelineState.commentedFramed}
                   isStreaming={streamingStep === "commented_framer"} error={stepErrors.commented_framer} color={COMMENTARY_COLOR}
                   openId={openStepId} setOpenId={setOpenStepId}
-                  onRun={() => runStep("commented_framer")} onEdit={v => editOutput("commented_framer", v)} onApprove={() => approveStep("commented_framer")} />
+                  onRun={() => runStep("commented_framer")} onEdit={v => editOutput("commented_framer", v)} onApprove={() => approveStep("commented_framer")}
+                  onReviseTarget={() => reviseReconstruction("commented_framer", "commented_reconstructor")}
+                  revisionTargetLabel="Oral Reconstruction" />
               </TrackSection>
             )}
           </div>
